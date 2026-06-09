@@ -9,6 +9,7 @@ import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
+import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
 import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateDoctorQuestionRequest;
@@ -57,6 +58,21 @@ public class CareController {
   @PostMapping("/spaces/{spaceId}/members")
   public Object inviteMember(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @Valid @RequestBody InviteMemberRequest request) {
     return careService.inviteMember(currentUser(httpRequest).id(), spaceId, request);
+  }
+
+  @PostMapping("/spaces/{spaceId}/member-invites")
+  public Object createInvite(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @Valid @RequestBody InviteMemberRequest request) {
+    return careService.createInvite(currentUser(httpRequest).id(), spaceId, request);
+  }
+
+  @GetMapping("/member-invites/{token}")
+  public Object getInvite(@PathVariable UUID token) {
+    return careService.getInvite(token);
+  }
+
+  @PatchMapping("/member-invites/{token}/accept")
+  public Object acceptInvite(HttpServletRequest httpRequest, @PathVariable UUID token, @RequestBody(required = false) AcceptInviteRequest request) {
+    return careService.acceptInvite(currentUser(httpRequest).id(), token, request);
   }
 
   @PatchMapping("/spaces/{spaceId}/members/{memberId}/accept")

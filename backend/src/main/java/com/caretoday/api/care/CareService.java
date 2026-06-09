@@ -7,6 +7,7 @@ import com.caretoday.api.care.CareModels.CareSpace;
 import com.caretoday.api.care.CareModels.DoctorQuestion;
 import com.caretoday.api.care.CareModels.HelpTask;
 import com.caretoday.api.care.CareModels.MemberStatus;
+import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
@@ -16,6 +17,7 @@ import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
+import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
 import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateDoctorQuestionRequest;
@@ -62,6 +64,30 @@ public class CareService {
     ensureAdmin(spaceId, currentUserId);
     SpaceMember member = careRepository.addMember(spaceId, null, request.nickname(), request.role(), MemberStatus.PENDING);
     careRepository.audit(spaceId, currentUserId, "member.invite", "space_member", member.id());
+    return member;
+  }
+
+  public SpaceInvite createInvite(UUID currentUserId, UUID spaceId, InviteMemberRequest request) {
+    ensureAdmin(spaceId, currentUserId);
+    if (request.role() == CareModels.MemberRole.PATIENT_ADMIN) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "邀请不能授予患者/管理员权限");
+    }
+    SpaceInvite invite = careRepository.createInvite(spaceId, currentUserId, request.nickname(), request.role());
+    careRepository.audit(spaceId, currentUserId, "member.invite.create", "space_invite", invite.token());
+    return invite;
+  }
+
+  public SpaceInvite getInvite(UUID token) {
+    return careRepository.findInvite(token)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "邀请链接无效或已过期"));
+  }
+
+  public SpaceMember acceptInvite(UUID currentUserId, UUID token, AcceptInviteRequest request) {
+    SpaceInvite invite = careRepository.findInvite(token)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "邀请链接无效或已过期"));
+    SpaceMember member = careRepository.acceptInvite(token, currentUserId, request == null ? null : request.nickname())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "邀请链接无效或已过期"));
+    careRepository.audit(invite.spaceId(), currentUserId, "member.invite.accept", "space_invite", token);
     return member;
   }
 
@@ -299,7 +325,7 @@ public class CareService {
   private void ensureAdmin(UUID spaceId, UUID currentUserId) {
     ensureActiveMember(spaceId, currentUserId);
     if (!careRepository.isAdmin(spaceId, currentUserId)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "admin permission required");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者/管理员可以邀请成员");
     }
   }
 }
