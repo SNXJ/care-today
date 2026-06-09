@@ -1,0 +1,980 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>陪你一起过今天</title>
+  <style>
+    :root {
+      --paper: #fbf8f4;
+      --panel: #fffdf9;
+      --panel-strong: #fff7ee;
+      --ink: #2e2a27;
+      --muted: #746b63;
+      --soft: #9a8d82;
+      --line: #eadfd3;
+      --rose: #c76872;
+      --rose-soft: #f7d9dc;
+      --sage: #78927c;
+      --sage-soft: #dfeadc;
+      --amber: #d79a4b;
+      --blue: #6f8da6;
+      --shadow: 0 24px 60px rgba(82, 63, 47, 0.11);
+      --radius: 8px;
+      --serif: Georgia, "Times New Roman", "Songti SC", serif;
+      --sans: "Avenir Next", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        linear-gradient(90deg, rgba(120, 146, 124, 0.05) 1px, transparent 1px),
+        linear-gradient(rgba(120, 146, 124, 0.05) 1px, transparent 1px),
+        var(--paper);
+      background-size: 34px 34px;
+      font-family: var(--sans);
+      letter-spacing: 0;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .app-shell {
+      display: grid;
+      grid-template-columns: 244px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 26px 18px;
+      border-right: 1px solid var(--line);
+      background: rgba(255, 253, 249, 0.82);
+      backdrop-filter: blur(16px);
+    }
+
+    .brand {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 0 8px 28px;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 42px;
+      height: 42px;
+      place-items: center;
+      color: #fff;
+      background: var(--rose);
+      border-radius: var(--radius);
+      box-shadow: 0 12px 24px rgba(199, 104, 114, 0.22);
+    }
+
+    .brand strong {
+      display: block;
+      font-family: var(--serif);
+      font-size: 19px;
+      font-weight: 700;
+    }
+
+    .brand span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .nav a {
+      display: flex;
+      gap: 11px;
+      align-items: center;
+      min-height: 42px;
+      padding: 0 12px;
+      color: var(--muted);
+      text-decoration: none;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      transition: 180ms ease;
+    }
+
+    .nav a:hover,
+    .nav a.active {
+      color: var(--ink);
+      background: var(--panel-strong);
+      border-color: var(--line);
+    }
+
+    .nav svg,
+    .icon {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      fill: none;
+    }
+
+    .side-note {
+      position: absolute;
+      right: 18px;
+      bottom: 24px;
+      left: 18px;
+      padding: 14px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      font-size: 12px;
+      line-height: 1.7;
+    }
+
+    main {
+      min-width: 0;
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      gap: 18px;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+
+    .eyebrow {
+      color: var(--rose);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 6px 0 8px;
+      font-family: var(--serif);
+      font-size: clamp(32px, 5vw, 54px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 690px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.8;
+    }
+
+    .privacy-pill {
+      display: inline-flex;
+      gap: 8px;
+      align-items: center;
+      white-space: nowrap;
+      padding: 10px 12px;
+      color: var(--sage);
+      background: rgba(223, 234, 220, 0.64);
+      border: 1px solid #cbdac7;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .need-button {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      min-height: 74px;
+      padding: 16px;
+      color: var(--ink);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 10px 28px rgba(82, 63, 47, 0.06);
+      text-align: left;
+      transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+    }
+
+    .need-button:hover {
+      transform: translateY(-2px);
+      border-color: rgba(199, 104, 114, 0.35);
+      box-shadow: var(--shadow);
+    }
+
+    .need-button .icon-wrap {
+      display: grid;
+      width: 40px;
+      height: 40px;
+      place-items: center;
+      color: var(--rose);
+      background: var(--rose-soft);
+      border-radius: var(--radius);
+    }
+
+    .need-button strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 15px;
+    }
+
+    .need-button span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(330px, 0.65fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .section-stack {
+      display: grid;
+      gap: 18px;
+    }
+
+    .card {
+      background: rgba(255, 253, 249, 0.94);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: 0 14px 44px rgba(82, 63, 47, 0.07);
+      overflow: hidden;
+    }
+
+    .card-header {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 18px 12px;
+    }
+
+    .card-title {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .card-title h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 22px;
+      line-height: 1.2;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      color: var(--muted);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .card-body {
+      padding: 0 18px 18px;
+    }
+
+    .today-grid {
+      display: grid;
+      grid-template-columns: 1fr 176px;
+      gap: 14px;
+    }
+
+    .schedule {
+      display: grid;
+      gap: 10px;
+    }
+
+    .schedule-row {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 58px;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .time {
+      color: var(--rose);
+      font-weight: 800;
+    }
+
+    .schedule-row strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 14px;
+    }
+
+    .schedule-row span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .countdown {
+      display: grid;
+      min-height: 100%;
+      padding: 16px;
+      color: #fff;
+      background: linear-gradient(145deg, #7d9a82, #c76872);
+      border-radius: var(--radius);
+      align-content: space-between;
+    }
+
+    .countdown span {
+      font-size: 13px;
+      opacity: 0.86;
+    }
+
+    .countdown strong {
+      display: block;
+      margin-top: 10px;
+      font-family: var(--serif);
+      font-size: 46px;
+      line-height: 1;
+    }
+
+    .countdown small {
+      display: block;
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.6;
+      opacity: 0.9;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .status-item {
+      padding: 14px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .status-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .range-line {
+      position: relative;
+      height: 8px;
+      overflow: hidden;
+      background: #f2e8de;
+      border-radius: 999px;
+    }
+
+    .range-line span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, var(--sage), var(--amber));
+      border-radius: inherit;
+    }
+
+    .checklist {
+      display: grid;
+      gap: 10px;
+    }
+
+    .check-row {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .check-row input {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0;
+      accent-color: var(--rose);
+    }
+
+    .help-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .help-card {
+      padding: 12px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .help-card header {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .help-card strong {
+      font-size: 14px;
+    }
+
+    .avatars {
+      display: flex;
+      align-items: center;
+      min-height: 30px;
+    }
+
+    .avatar {
+      display: grid;
+      width: 28px;
+      height: 28px;
+      place-items: center;
+      margin-right: -7px;
+      color: #fff;
+      background: var(--rose);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .claim-btn,
+    .small-btn {
+      min-height: 32px;
+      padding: 0 10px;
+      color: var(--rose);
+      background: #fff7f7;
+      border: 1px solid var(--rose-soft);
+      border-radius: var(--radius);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .small-btn.sage {
+      color: var(--sage);
+      background: #f3f8f1;
+      border-color: var(--sage-soft);
+    }
+
+    .message-list,
+    .file-list,
+    .urgent-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .message {
+      padding: 13px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .message p {
+      margin: 0 0 8px;
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .message span {
+      color: var(--soft);
+      font-size: 12px;
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: 34px 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+    }
+
+    .file-icon {
+      display: grid;
+      width: 34px;
+      height: 34px;
+      place-items: center;
+      color: var(--blue);
+      background: #edf3f6;
+      border-radius: var(--radius);
+    }
+
+    .file-row strong {
+      display: block;
+      margin-bottom: 2px;
+      font-size: 13px;
+    }
+
+    .file-row span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .urgent {
+      border-color: #f0d4bd;
+      background: #fffaf4;
+    }
+
+    .urgent-list li {
+      margin-left: 18px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 13px;
+    }
+
+    .urgent-list ul {
+      margin: 0;
+      padding: 0;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .form-row input,
+    textarea {
+      width: 100%;
+      min-height: 38px;
+      padding: 9px 10px;
+      color: var(--ink);
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      outline: none;
+    }
+
+    textarea {
+      min-height: 72px;
+      resize: vertical;
+      line-height: 1.6;
+    }
+
+    .toast {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 20;
+      display: none;
+      padding: 12px 14px;
+      color: #fff;
+      background: var(--ink);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      font-size: 13px;
+    }
+
+    .toast.show {
+      display: block;
+      animation: fadeUp 260ms ease;
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: fixed;
+        top: auto;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        z-index: 10;
+        height: auto;
+        padding: 8px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: var(--shadow);
+      }
+
+      .brand,
+      .side-note {
+        display: none;
+      }
+
+      .nav {
+        grid-template-columns: repeat(6, 1fr);
+      }
+
+      .nav a {
+        min-height: 44px;
+        justify-content: center;
+        padding: 0;
+        font-size: 0;
+      }
+
+      .nav svg {
+        width: 20px;
+        height: 20px;
+      }
+
+      main {
+        padding: 22px 16px 88px;
+      }
+
+      .dashboard,
+      .today-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .quick-actions {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .topbar {
+        display: grid;
+      }
+
+      .privacy-pill {
+        width: max-content;
+        max-width: 100%;
+        white-space: normal;
+      }
+
+      .schedule-row {
+        grid-template-columns: 58px 1fr;
+      }
+
+      .schedule-row .tag {
+        grid-column: 2;
+        width: max-content;
+      }
+
+      .status-grid,
+      .help-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .card-header {
+        align-items: flex-start;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M20 7c-3 0-5 1.5-8 5-3-3.5-5-5-8-5"/><path d="M4 7c0 6 5 10 8 12 3-2 8-6 8-12"/></svg>
+        </div>
+        <div>
+          <strong>陪你一起过今天</strong>
+          <span>生活陪伴与就诊整理</span>
+        </div>
+      </div>
+      <nav class="nav" aria-label="页面导航">
+        <a class="active" href="#today"><svg viewBox="0 0 24 24"><path d="M3 12h18"/><path d="M12 3v18"/></svg>今天</a>
+        <a href="#calendar"><svg viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>日历</a>
+        <a href="#doctor"><svg viewBox="0 0 24 24"><path d="M12 7v6"/><path d="M9 10h6"/><path d="M4 4h16v16H4z"/></svg>问医生</a>
+        <a href="#body"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>身体记录</a>
+        <a href="#help"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>帮忙墙</a>
+        <a href="#notes"><svg viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>留言</a>
+      </nav>
+      <div class="side-note">
+        仅供生活陪伴与就诊整理，不替代医生建议。涉及治疗方案、用药和症状处理，请以主治医生意见为准。
+      </div>
+    </aside>
+
+    <main>
+      <section class="topbar" id="today">
+        <div>
+          <div class="eyebrow">今天先照顾好这一件事</div>
+          <h1>陪你一起过今天</h1>
+          <p class="lead">不用一个人记住所有事情。这里帮你整理复诊、身体感受、想问医生的问题，以及家人朋友可以接住的具体小事。</p>
+        </div>
+        <div class="privacy-pill">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          仅自己和家人可见
+        </div>
+      </section>
+
+      <section class="quick-actions" aria-label="快速求助">
+        <button class="need-button" data-need="陪我去医院">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M10 17h4"/><path d="M12 15v4"/><path d="M6 3h12l2 7H4z"/><path d="M5 10v8a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-8"/></svg></span>
+          <span><strong>陪我去医院</strong><span>把时间、地点和资料先放好</span></span>
+        </button>
+        <button class="need-button" data-need="帮我处理一件事">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          <span><strong>帮我处理一件事</strong><span>买药、做饭、接送都可以认领</span></span>
+        </button>
+        <button class="need-button" data-need="只是陪我聊聊">
+          <span class="icon-wrap"><svg class="icon" viewBox="0 0 24 24"><path d="M7 8h10"/><path d="M7 12h6"/><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg></span>
+          <span><strong>只是陪我聊聊</strong><span>不讲道理，也不急着解决</span></span>
+        </button>
+      </section>
+
+      <section class="dashboard">
+        <div class="section-stack">
+          <article class="card" id="calendar">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 10h18"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>
+                <h2>今日安排</h2>
+              </div>
+              <span class="tag">下次复诊：6 月 18 日</span>
+            </div>
+            <div class="card-body today-grid">
+              <div class="schedule">
+                <div class="schedule-row">
+                  <div class="time">09:20</div>
+                  <div><strong>门诊复查</strong><span>带上病理报告、用药单、最近症状记录</span></div>
+                  <span class="tag">需要陪同</span>
+                </div>
+                <div class="schedule-row">
+                  <div class="time">14:00</div>
+                  <div><strong>整理想问医生的问题</strong><span>把担心的事写下来，复诊时逐条确认</span></div>
+                  <span class="tag">15 分钟</span>
+                </div>
+                <div class="schedule-row">
+                  <div class="time">20:30</div>
+                  <div><strong>记录今天身体感受</strong><span>疼痛、乏力、睡眠、心情简单打分</span></div>
+                  <span class="tag">睡前</span>
+                </div>
+              </div>
+              <div class="countdown">
+                <div>
+                  <span>距离下次复诊</span>
+                  <strong>9</strong>
+                  <small>天后带齐资料包，不用临时回忆。</small>
+                </div>
+                <button class="small-btn">生成复诊资料包</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card" id="body">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+                <h2>身体状态</h2>
+              </div>
+              <span class="tag">本地记录</span>
+            </div>
+            <div class="card-body">
+              <div class="status-grid">
+                <div class="status-item"><div class="status-label"><span>疼痛</span><strong>3/10</strong></div><div class="range-line"><span style="width: 30%"></span></div></div>
+                <div class="status-item"><div class="status-label"><span>乏力</span><strong>6/10</strong></div><div class="range-line"><span style="width: 60%"></span></div></div>
+                <div class="status-item"><div class="status-label"><span>睡眠</span><strong>5/10</strong></div><div class="range-line"><span style="width: 50%"></span></div></div>
+                <div class="status-item"><div class="status-label"><span>心情</span><strong>4/10</strong></div><div class="range-line"><span style="width: 40%"></span></div></div>
+              </div>
+              <div class="form-row">
+                <input id="statusInput" type="text" placeholder="补充今天的感受，例如：下午有点恶心，晚饭吃得少" />
+                <button class="small-btn sage" id="saveStatus">保存记录</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card" id="doctor">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M12 7v6"/><path d="M9 10h6"/><path d="M4 4h16v16H4z"/></svg>
+                <h2>问医生清单</h2>
+              </div>
+              <span class="tag">复诊前勾选</span>
+            </div>
+            <div class="card-body checklist">
+              <label class="check-row"><input type="checkbox" />我的分期、分型和这次治疗目标分别是什么？</label>
+              <label class="check-row"><input type="checkbox" />现在的药物或治疗常见副作用有哪些，哪些情况需要马上联系医院？</label>
+              <label class="check-row"><input type="checkbox" />饮食、运动、工作、睡眠有没有需要特别注意的限制？</label>
+              <label class="check-row"><input type="checkbox" />下次检查需要提前准备什么，报告多久可以拿到？</label>
+            </div>
+          </article>
+        </div>
+
+        <aside class="section-stack">
+          <article class="card urgent">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                <h2>及时联系医生</h2>
+              </div>
+            </div>
+            <div class="card-body urgent-list">
+              <ul>
+                <li>持续发热、寒战或明显感染迹象。</li>
+                <li>严重疼痛、呼吸困难、胸闷或晕厥。</li>
+                <li>伤口红肿渗液、明显过敏或用药后不适加重。</li>
+              </ul>
+            </div>
+          </article>
+
+          <article class="card" id="help">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/></svg>
+                <h2>朋友帮忙墙</h2>
+              </div>
+              <span class="tag">可认领</span>
+            </div>
+            <div class="card-body help-grid">
+              <div class="help-card"><header><strong>陪诊</strong><button class="claim-btn">认领</button></header><div class="avatars"><span class="avatar">姐</span><span class="avatar" style="background: var(--sage)">友</span></div></div>
+              <div class="help-card"><header><strong>做饭</strong><button class="claim-btn">认领</button></header><div class="avatars"><span class="avatar" style="background: var(--amber)">妈</span></div></div>
+              <div class="help-card"><header><strong>接送</strong><button class="claim-btn">认领</button></header><div class="avatars"><span class="avatar" style="background: var(--blue)">同</span></div></div>
+              <div class="help-card"><header><strong>买药</strong><button class="claim-btn">认领</button></header><div class="avatars"><span class="tag">还没人</span></div></div>
+            </div>
+          </article>
+
+          <article class="card" id="notes">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M21 15a4 4 0 0 1-4 4H7l-4 4V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+                <h2>温柔留言</h2>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="message-list" id="messageList">
+                <div class="message"><p>今天不用把所有事都做好，先吃一点、睡一会儿，我们都在。</p><span>家人 · 10:24</span></div>
+                <div class="message"><p>明天我可以陪你去医院，资料我晚上帮你一起整理。</p><span>朋友 · 昨天</span></div>
+              </div>
+              <div class="form-row">
+                <input id="messageInput" type="text" placeholder="写一句不催促、不讲道理的陪伴话" />
+                <button class="small-btn" id="addMessage">添加</button>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-header">
+              <div class="card-title">
+                <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg>
+                <h2>复诊资料夹</h2>
+              </div>
+            </div>
+            <div class="card-body file-list">
+              <div class="file-row"><span class="file-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6v20h12V8z"/><path d="M14 2v6h6"/></svg></span><div><strong>病理报告</strong><span>上次更新：6 月 6 日</span></div><button class="small-btn sage">查看</button></div>
+              <div class="file-row"><span class="file-icon"><svg class="icon" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></svg></span><div><strong>当前用药</strong><span>剂量、时间、注意事项</span></div><button class="small-btn sage">整理</button></div>
+            </div>
+          </article>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite">已保存</div>
+
+  <script>
+    const toast = document.getElementById('toast');
+    const showToast = (text) => {
+      toast.textContent = text;
+      toast.classList.add('show');
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove('show'), 1800);
+    };
+
+    document.querySelectorAll('.need-button').forEach((button) => {
+      button.addEventListener('click', () => showToast(`已记录：${button.dataset.need}`));
+    });
+
+    document.querySelectorAll('.claim-btn').forEach((button) => {
+      button.addEventListener('click', () => {
+        button.textContent = '已认领';
+        button.disabled = true;
+        showToast('已加入帮忙墙');
+      });
+    });
+
+    document.getElementById('saveStatus').addEventListener('click', () => {
+      const input = document.getElementById('statusInput');
+      if (!input.value.trim()) {
+        showToast('先写一点今天的感受');
+        return;
+      }
+      localStorage.setItem('support-page-status', input.value.trim());
+      input.value = '';
+      showToast('身体记录已本地保存');
+    });
+
+    document.getElementById('addMessage').addEventListener('click', () => {
+      const input = document.getElementById('messageInput');
+      const text = input.value.trim();
+      if (!text) {
+        showToast('先写一句留言');
+        return;
+      }
+      const item = document.createElement('div');
+      item.className = 'message';
+      item.innerHTML = `<p>${text.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p><span>刚刚</span>`;
+      document.getElementById('messageList').prepend(item);
+      input.value = '';
+      showToast('留言已添加');
+    });
+  </script>
+</body>
+</html>
