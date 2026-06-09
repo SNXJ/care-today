@@ -11,16 +11,20 @@ Implemented endpoint groups:
 - `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
+- `DELETE /api/account`
 - `GET/POST /api/spaces`
 - `GET /api/spaces/:spaceId`
 - `POST /api/spaces/:spaceId/members`
-- `GET/POST /api/spaces/:spaceId/events`
-- `GET/POST /api/spaces/:spaceId/body-records`
-- `GET/POST/PATCH /api/spaces/:spaceId/doctor-questions`
-- `GET/POST /api/spaces/:spaceId/help-tasks`
+- `PATCH /api/spaces/:spaceId/members/:memberId/accept`
+- `DELETE /api/spaces/:spaceId/members/:memberId`
+- `DELETE /api/spaces/:spaceId/leave`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/events`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/body-records`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/doctor-questions`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/help-tasks`
 - `PATCH /api/spaces/:spaceId/help-tasks/:taskId/claim`
-- `GET/POST /api/spaces/:spaceId/messages`
-- `GET/POST /api/spaces/:spaceId/notes`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/messages`
+- `GET/POST/PATCH/DELETE /api/spaces/:spaceId/notes`
 
 ## Where Data Is Added
 
@@ -69,6 +73,7 @@ MySQL schema and Flyway migration:
 ```text
 backend/database/schema.sql
 backend/src/main/resources/db/migration/V1__init.sql
+backend/src/main/resources/db/migration/V2__body_records_soft_delete.sql
 ```
 
 Persisted tables:
@@ -84,7 +89,7 @@ Persisted tables:
 - `notes`
 - `audit_logs`
 
-Every `/api/spaces/:spaceId/**` endpoint requires the caller to be an active member of that space. Member invitation requires `PATIENT_ADMIN`.
+Every `/api/spaces/:spaceId/**` endpoint requires the caller to be an active member of that space. Member invitation and removing another member require `PATIENT_ADMIN`. Delete endpoints soft-delete data and return `204 No Content`.
 
 ## Auth
 
@@ -119,13 +124,14 @@ curl -X POST http://localhost:3000/api/spaces \
   -d '{"name":"陪你一起过今天","patientNickname":"小洁"}'
 ```
 
-## Remaining Backend Work
+## Test
 
-- member join/accept flow
-- edit/delete endpoints
-- account deletion and space exit
-- request-level audit metadata such as IP and user agent
-- automated API tests
+```bash
+cd backend
+mvn test
+```
+
+Current tests cover the API routing contract for edit/delete endpoints, member accept/leave, and account deletion.
 
 ## Medical Boundary
 

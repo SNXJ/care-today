@@ -30,6 +30,13 @@ public final class CareRequests {
       String note,
       boolean needsCompanion) {}
 
+  public record UpdateEventRequest(
+      String title,
+      Instant scheduledAt,
+      String location,
+      String note,
+      Boolean needsCompanion) {}
+
   public record CreateBodyRecordRequest(
       @Min(0) @Max(10) int painScore,
       @Min(0) @Max(10) int fatigueScore,
@@ -40,11 +47,22 @@ public final class CareRequests {
       String note,
       @NotNull LocalDate recordDate) {}
 
+  public record UpdateBodyRecordRequest(
+      @Min(0) @Max(10) Integer painScore,
+      @Min(0) @Max(10) Integer fatigueScore,
+      @Min(0) @Max(10) Integer sleepScore,
+      @Min(0) @Max(10) Integer moodScore,
+      @Min(0) @Max(10) Integer appetiteScore,
+      @DecimalMin("34.0") @DecimalMax("42.0") Double temperature,
+      String note,
+      LocalDate recordDate) {}
+
   public record CreateDoctorQuestionRequest(
       @NotBlank String question,
       boolean important) {}
 
   public record UpdateDoctorQuestionRequest(
+      String question,
       Boolean asked,
       String doctorAnswer,
       Boolean important) {}
@@ -55,11 +73,26 @@ public final class CareRequests {
       Instant scheduledAt,
       String description) {}
 
+  public record UpdateHelpTaskRequest(
+      String title,
+      String type,
+      Instant scheduledAt,
+      String description,
+      String status) {}
+
   public record CreateMessageRequest(@NotBlank String text) {}
+
+  public record UpdateMessageRequest(String text) {}
 
   public record CreateNoteRequest(
       @NotBlank String title,
       @NotBlank String type,
       String content,
       @NotNull NoteVisibility visibility) {}
+
+  public record UpdateNoteRequest(
+      String title,
+      String type,
+      String content,
+      NoteVisibility visibility) {}
 }

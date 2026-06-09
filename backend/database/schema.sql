@@ -77,6 +77,8 @@ CREATE TABLE body_records (
   note TEXT,
   record_date DATE NOT NULL,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  deleted_at DATETIME(3),
   CONSTRAINT fk_body_records_space FOREIGN KEY (space_id) REFERENCES care_spaces(id) ON DELETE CASCADE,
   CONSTRAINT fk_body_records_user FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
