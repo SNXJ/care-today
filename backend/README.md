@@ -4,7 +4,7 @@ Spring Boot API scaffold for CareToday.
 
 ## Current Scope
 
-This backend provides the first Spring Boot API implementation for CareToday. It uses JWT authentication, BCrypt password hashing, Flyway migrations, PostgreSQL persistence, and space membership checks.
+This backend provides the first Spring Boot API implementation for CareToday. It uses JWT authentication, BCrypt password hashing, Flyway migrations, MySQL persistence, and space membership checks.
 
 Implemented endpoint groups:
 
@@ -29,14 +29,14 @@ Data can be added from either:
 - the Vue web UI, which calls these `/api` endpoints after login
 - direct API calls, using the JWT returned by `/api/auth/login`
 
-All workspace data is stored in PostgreSQL. The backend does not keep business data in memory.
+All workspace data is stored in MySQL. The backend does not keep business data in memory.
 
 ## Run Locally
 
-The API requires PostgreSQL. Create a database/user matching `.env.example`, then enable Flyway:
+The API requires MySQL 8. Create a database/user matching `.env.example`, then enable Flyway:
 
 ```bash
-export DATABASE_URL=jdbc:postgresql://localhost:5432/care_today
+export DATABASE_URL='jdbc:mysql://localhost:3306/care_today?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai'
 export DATABASE_USER=care_today
 export DATABASE_PASSWORD=care_today_password
 export FLYWAY_ENABLED=true
@@ -64,7 +64,7 @@ java -jar target/care-today-backend-0.1.0.jar
 
 ## Database
 
-PostgreSQL schema and Flyway migration:
+MySQL schema and Flyway migration:
 
 ```text
 backend/database/schema.sql

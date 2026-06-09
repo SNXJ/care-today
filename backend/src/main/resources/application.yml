@@ -5,7 +5,7 @@ spring:
   application:
     name: care-today-backend
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/care_today}
+    url: ${DATABASE_URL:jdbc:mysql://localhost:3306/care_today?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
     username: ${DATABASE_USER:care_today}
     password: ${DATABASE_PASSWORD:care_today_password}
   flyway:

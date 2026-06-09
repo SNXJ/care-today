@@ -1,16 +1,17 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: care-today-postgres
+  mysql:
+    image: mysql:8.4
+    container_name: care-today-mysql
     environment:
-      POSTGRES_DB: care_today
-      POSTGRES_USER: care_today
-      POSTGRES_PASSWORD: care_today_password
+      MYSQL_DATABASE: care_today
+      MYSQL_USER: care_today
+      MYSQL_PASSWORD: care_today_password
+      MYSQL_ROOT_PASSWORD: care_today_root_password
     volumes:
-      - care_today_postgres:/var/lib/postgresql/data
+      - care_today_mysql:/var/lib/mysql
       - ../backend/database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     ports:
-      - "5432:5432"
+      - "3306:3306"
 
   backend:
     image: maven:3.9-eclipse-temurin-17
@@ -19,7 +20,7 @@ services:
     command: sh -c "mvn clean package -DskipTests && java -jar target/care-today-backend-0.1.0.jar"
     environment:
       PORT: 3000
-      DATABASE_URL: jdbc:postgresql://postgres:5432/care_today
+      DATABASE_URL: jdbc:mysql://mysql:3306/care_today?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
       DATABASE_USER: care_today
       DATABASE_PASSWORD: care_today_password
       FLYWAY_ENABLED: "true"
@@ -29,7 +30,7 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
+      - mysql
 
   nginx:
     image: nginx:1.27-alpine
@@ -43,4 +44,4 @@ services:
       - backend
 
 volumes:
-  care_today_postgres:
+  care_today_mysql:
