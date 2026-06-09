@@ -27,7 +27,7 @@ CareToday 希望把这些事变得更清楚一点：
 - `design-preview/preview.png`：Web 原型桌面端截图
 - `design-preview/preview-mobile.png`：Web 原型移动端截图
 
-后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化和审计日志写入。前端仍以本地模拟数据为主，下一步需要做前后端联调。
+后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化和审计日志写入。前端已接入基础 API：登录/注册、创建空间、加载空间数据，以及添加日程、身体记录、问医生问题、帮忙任务、留言、资料和邀请成员。
 
 ## 页面截图
 
@@ -138,6 +138,21 @@ backend/.env.example
 ```text
 http://localhost:3000/api
 ```
+
+## 数据从哪里添加
+
+当前数据有两个入口：
+
+- Web 页面添加：登录后先创建陪伴空间，再在页面里添加日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。前端会调用 `/api`，数据写入 PostgreSQL。
+- API 添加：可以直接调用 Spring Boot 后端接口，例如 `POST /api/auth/register`、`POST /api/spaces`、`POST /api/spaces/{spaceId}/events`。除注册和登录外，请求需要带 `Authorization: Bearer <token>`。
+
+本地开发时，前端默认请求同源 `/api`。如果后端单独运行在 `http://localhost:3000`，可以配置：
+
+```bash
+VITE_API_BASE=http://localhost:3000/api npm run dev
+```
+
+生产部署时由 Nginx 把 `/api` 反向代理到后端。
 
 ## 医疗边界
 

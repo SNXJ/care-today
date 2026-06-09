@@ -1,5 +1,6 @@
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
+import { createApi } from './api';
 
 import iconToday from './assets/icons/nav-today.svg';
 import iconCalendar from './assets/icons/nav-calendar.svg';
@@ -37,41 +38,42 @@ const quickNeeds = [
 
 const view = ref('today');
 const toastText = ref('');
-const statusNote = ref(localStorage.getItem('care-today-status') || '');
+const loading = ref(false);
+const token = ref(localStorage.getItem('care-today-token') || '');
+const currentUser = ref(JSON.parse(localStorage.getItem('care-today-user') || 'null'));
+const activeSpaceId = ref(localStorage.getItem('care-today-space-id') || '');
+const authMode = ref('login');
+const authForm = ref({
+  email: '',
+  phone: '',
+  nickname: '',
+  password: '',
+});
+const spaceForm = ref({
+  name: '陪你一起过今天',
+  patientNickname: '',
+  description: '',
+});
+const statusNote = ref('');
 const statusDraft = ref('');
 const messageDraft = ref('');
 const questionDraft = ref('');
 const taskDraft = ref('');
 const noteDraft = ref('');
 const invitePhone = ref('');
+const eventDraft = ref({
+  title: '',
+  scheduledAt: '',
+  location: '',
+  note: '',
+  needsCompanion: false,
+});
 const privacyAccepted = ref(false);
+const api = createApi(() => token.value);
 
-const events = ref([
-  {
-    time: '09:20',
-    title: '门诊复查',
-    place: '乳腺外科门诊 3 诊室',
-    note: '带上病理报告、用药单、最近症状记录',
-    tag: '需要陪同',
-    date: '6 月 18 日',
-  },
-  {
-    time: '14:00',
-    title: '整理想问医生的问题',
-    place: '家中',
-    note: '把担心的事写下来，复诊时逐条确认',
-    tag: '15 分钟',
-    date: '今天',
-  },
-  {
-    time: '20:30',
-    title: '记录今天身体感受',
-    place: '睡前',
-    note: '疼痛、乏力、睡眠、心情简单打分',
-    tag: '站内提醒',
-    date: '今天',
-  },
-]);
+const spaces = ref([]);
+const activeSpace = ref(null);
+const events = ref([]);
 
 const bodyRecords = ref([
   { label: '疼痛', value: 3 },
@@ -82,39 +84,32 @@ const bodyRecords = ref([
   { label: '体温', value: 37 },
 ]);
 
-const questions = ref([
-  { text: '我的分期、分型和这次治疗目标分别是什么？', done: false, important: true, answer: '' },
-  { text: '现在的药物或治疗常见副作用有哪些，哪些情况需要马上联系医院？', done: false, important: true, answer: '' },
-  { text: '饮食、运动、工作、睡眠有没有需要特别注意的限制？', done: false, important: false, answer: '' },
-  { text: '下次检查需要提前准备什么，报告多久可以拿到？', done: true, important: false, answer: '提前预约抽血，报告当天可在院内系统查看。' },
-]);
-
-const helpTasks = ref([
-  { title: '陪诊', type: '陪诊', time: '6 月 18 日 09:20', desc: '帮忙一起带资料、记录医生答复。', status: '待认领', claimedBy: '' },
-  { title: '做饭', type: '做饭', time: '今天晚饭', desc: '清淡一点，少油。', status: '已认领', claimedBy: '妈妈' },
-  { title: '接送', type: '接送', time: '周五下午', desc: '从医院回家。', status: '待认领', claimedBy: '' },
-  { title: '整理报告', type: '整理报告', time: '复诊前一天', desc: '按日期把报告名称和备注整理好。', status: '已完成', claimedBy: '姐姐' },
-]);
-
-const messages = ref([
-  { text: '今天不用把所有事都做好，先吃一点、睡一会儿，我们都在。', author: '家人', time: '10:24' },
-  { text: '明天我可以陪你去医院，资料我晚上帮你一起整理。', author: '朋友', time: '昨天' },
-]);
-
-const notes = ref([
-  { title: '病理报告', type: '报告名称记录', desc: '上次更新：6 月 6 日', visibility: '患者和管理员可见' },
-  { title: '当前用药', type: '用药记录', desc: '剂量、时间、注意事项', visibility: '患者和管理员可见' },
-  { title: '医嘱备注', type: '医嘱文本', desc: '复诊后补充医生答复', visibility: '空间成员可见' },
-]);
-
-const members = ref([
-  { name: '小洁', role: '患者/管理员', access: '完整管理权限', status: '已加入' },
-  { name: '姐姐', role: '家属', access: '可查看多数信息、创建任务、留言', status: '已加入' },
-  { name: '朋友 A', role: '朋友', access: '可认领任务、留言', status: '已授权' },
-  { name: '同事 B', role: '只读成员', access: '只能查看被授权内容', status: '待确认' },
-]);
+const questions = ref([]);
+const helpTasks = ref([]);
+const messages = ref([]);
+const notes = ref([]);
+const members = ref([]);
 
 const activeNav = computed(() => navItems.find((item) => item.id === view.value));
+const isAuthed = computed(() => Boolean(token.value && currentUser.value));
+const hasSpace = computed(() => Boolean(activeSpaceId.value));
+const nextVisitLabel = computed(() => events.value[0]?.date || '待添加');
+const bodyRecordPayload = computed(() => ({
+  painScore: Number(bodyRecords.value.find((item) => item.label === '疼痛')?.value || 0),
+  fatigueScore: Number(bodyRecords.value.find((item) => item.label === '乏力')?.value || 0),
+  sleepScore: Number(bodyRecords.value.find((item) => item.label === '睡眠')?.value || 0),
+  moodScore: Number(bodyRecords.value.find((item) => item.label === '心情')?.value || 0),
+  appetiteScore: Number(bodyRecords.value.find((item) => item.label === '食欲')?.value || 0),
+  temperature: Number(bodyRecords.value.find((item) => item.label === '体温')?.value || 37),
+  note: statusDraft.value.trim(),
+  recordDate: new Date().toISOString().slice(0, 10),
+}));
+
+onMounted(() => {
+  if (isAuthed.value) {
+    loadSpaces();
+  }
+});
 
 function showToast(text) {
   toastText.value = text;
@@ -129,92 +124,316 @@ function go(nextView) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
+async function withLoading(action) {
+  loading.value = true;
+  try {
+    await action();
+  } catch (error) {
+    showToast(error.message || '请求失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function submitAuth() {
+  await withLoading(async () => {
+    const payload = {
+      email: authForm.value.email.trim() || undefined,
+      phone: authForm.value.phone.trim() || undefined,
+      password: authForm.value.password,
+      ...(authMode.value === 'register' ? { nickname: authForm.value.nickname.trim() } : {}),
+    };
+    const result = authMode.value === 'register' ? await api.register(payload) : await api.login(payload);
+    token.value = result.token;
+    currentUser.value = result.user;
+    localStorage.setItem('care-today-token', result.token);
+    localStorage.setItem('care-today-user', JSON.stringify(result.user));
+    spaceForm.value.patientNickname = result.user.nickname;
+    showToast(authMode.value === 'register' ? '注册成功' : '登录成功');
+    await loadSpaces();
+  });
+}
+
+function logout() {
+  token.value = '';
+  currentUser.value = null;
+  activeSpaceId.value = '';
+  activeSpace.value = null;
+  spaces.value = [];
+  events.value = [];
+  questions.value = [];
+  helpTasks.value = [];
+  messages.value = [];
+  notes.value = [];
+  members.value = [];
+  localStorage.removeItem('care-today-token');
+  localStorage.removeItem('care-today-user');
+  localStorage.removeItem('care-today-space-id');
+  showToast('已退出登录');
+}
+
+async function loadSpaces() {
+  await withLoading(async () => {
+    spaces.value = await api.listSpaces();
+    const selected = spaces.value.find((space) => space.id === activeSpaceId.value) || spaces.value[0];
+    if (selected) {
+      await selectSpace(selected.id);
+    }
+  });
+}
+
+async function createSpace() {
+  await withLoading(async () => {
+    const space = await api.createSpace({
+      name: spaceForm.value.name.trim(),
+      patientNickname: spaceForm.value.patientNickname.trim() || currentUser.value.nickname,
+      description: spaceForm.value.description.trim() || undefined,
+    });
+    showToast('陪伴空间已创建');
+    await selectSpace(space.id);
+  });
+}
+
+async function selectSpace(spaceId) {
+  activeSpaceId.value = spaceId;
+  localStorage.setItem('care-today-space-id', spaceId);
+  const detail = await api.getSpace(spaceId);
+  activeSpace.value = detail.space;
+  members.value = (detail.members || []).map(mapMember);
+  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadHelpTasks(), loadMessages(), loadNotes()]);
+}
+
+async function loadEvents() {
+  events.value = (await api.listEvents(activeSpaceId.value)).map(mapEvent);
+}
+
+async function loadBodyRecords() {
+  const records = await api.listBodyRecords(activeSpaceId.value);
+  const latest = records[0];
+  if (latest) {
+    bodyRecords.value = [
+      { label: '疼痛', value: latest.painScore },
+      { label: '乏力', value: latest.fatigueScore },
+      { label: '睡眠', value: latest.sleepScore },
+      { label: '心情', value: latest.moodScore },
+      { label: '食欲', value: latest.appetiteScore },
+      { label: '体温', value: latest.temperature },
+    ];
+    statusNote.value = latest.note || '';
+  }
+}
+
+async function loadQuestions() {
+  questions.value = (await api.listDoctorQuestions(activeSpaceId.value)).map(mapQuestion);
+}
+
+async function loadHelpTasks() {
+  helpTasks.value = (await api.listHelpTasks(activeSpaceId.value)).map(mapTask);
+}
+
+async function loadMessages() {
+  messages.value = (await api.listMessages(activeSpaceId.value)).map(mapMessage);
+}
+
+async function loadNotes() {
+  notes.value = (await api.listNotes(activeSpaceId.value)).map(mapNote);
+}
+
 function saveNeed(label) {
   showToast(`已记录：${label}`);
 }
 
-function saveStatus() {
+async function saveStatus() {
   if (!statusDraft.value.trim()) {
     showToast('先写一点今天的感受');
     return;
   }
-  statusNote.value = statusDraft.value.trim();
-  localStorage.setItem('care-today-status', statusNote.value);
-  statusDraft.value = '';
-  showToast('身体记录已本地保存');
+  await withLoading(async () => {
+    const result = await api.createBodyRecord(activeSpaceId.value, bodyRecordPayload.value);
+    statusNote.value = result.record.note || '';
+    statusDraft.value = '';
+    showToast('身体记录已保存到数据库');
+  });
 }
 
-function addQuestion() {
+async function addQuestion() {
   if (!questionDraft.value.trim()) {
     showToast('先写下想问医生的问题');
     return;
   }
-  questions.value.unshift({ text: questionDraft.value.trim(), done: false, important: false, answer: '' });
-  questionDraft.value = '';
-  showToast('已加入问医生清单');
+  await withLoading(async () => {
+    await api.createDoctorQuestion(activeSpaceId.value, { question: questionDraft.value.trim(), important: false });
+    questionDraft.value = '';
+    await loadQuestions();
+    showToast('已加入问医生清单');
+  });
 }
 
-function claimTask(task) {
-  task.status = '已认领';
-  task.claimedBy = '我';
-  showToast('已认领这件事');
+async function addEvent() {
+  if (!eventDraft.value.title.trim() || !eventDraft.value.scheduledAt) {
+    showToast('先填写日程标题和时间');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createEvent(activeSpaceId.value, {
+      title: eventDraft.value.title.trim(),
+      scheduledAt: new Date(eventDraft.value.scheduledAt).toISOString(),
+      location: eventDraft.value.location.trim() || undefined,
+      note: eventDraft.value.note.trim() || undefined,
+      needsCompanion: eventDraft.value.needsCompanion,
+    });
+    eventDraft.value = { title: '', scheduledAt: '', location: '', note: '', needsCompanion: false };
+    await loadEvents();
+    showToast('日程已添加');
+  });
 }
 
-function addTask() {
+async function toggleImportant(question) {
+  await withLoading(async () => {
+    await api.updateDoctorQuestion(activeSpaceId.value, question.id, { important: !question.important });
+    await loadQuestions();
+  });
+}
+
+async function claimTask(task) {
+  await withLoading(async () => {
+    await api.claimHelpTask(activeSpaceId.value, task.id);
+    await loadHelpTasks();
+    showToast('已认领这件事');
+  });
+}
+
+async function addTask() {
   if (!taskDraft.value.trim()) {
     showToast('先写一件可以被认领的小事');
     return;
   }
-  helpTasks.value.unshift({
-    title: taskDraft.value.trim(),
-    type: '其他',
-    time: '待约定',
-    desc: '创建后可补充时间和说明。',
-    status: '待认领',
-    claimedBy: '',
+  await withLoading(async () => {
+    await api.createHelpTask(activeSpaceId.value, {
+      title: taskDraft.value.trim(),
+      type: '其他',
+      description: '创建后可补充时间和说明。',
+    });
+    taskDraft.value = '';
+    await loadHelpTasks();
+    showToast('已添加到帮忙墙');
   });
-  taskDraft.value = '';
-  showToast('已添加到帮忙墙');
 }
 
-function addMessage() {
+async function addMessage() {
   if (!messageDraft.value.trim()) {
     showToast('先写一句留言');
     return;
   }
-  messages.value.unshift({ text: messageDraft.value.trim(), author: '我', time: '刚刚' });
-  messageDraft.value = '';
-  showToast('留言已添加');
+  await withLoading(async () => {
+    await api.createMessage(activeSpaceId.value, { text: messageDraft.value.trim() });
+    messageDraft.value = '';
+    await loadMessages();
+    showToast('留言已添加');
+  });
 }
 
-function addNote() {
+async function addNote() {
   if (!noteDraft.value.trim()) {
     showToast('先写一个资料名称');
     return;
   }
-  notes.value.unshift({
-    title: noteDraft.value.trim(),
-    type: '文本资料',
-    desc: '刚刚创建',
-    visibility: '患者和管理员可见',
+  await withLoading(async () => {
+    await api.createNote(activeSpaceId.value, {
+      title: noteDraft.value.trim(),
+      type: '文本资料',
+      content: '',
+      visibility: 'PATIENT_ADMIN',
+    });
+    noteDraft.value = '';
+    await loadNotes();
+    showToast('资料记录已创建');
   });
-  noteDraft.value = '';
-  showToast('资料记录已创建');
 }
 
-function inviteMember() {
+async function inviteMember() {
   if (!invitePhone.value.trim()) {
     showToast('先填写手机号或备注名');
     return;
   }
-  members.value.push({
-    name: invitePhone.value.trim(),
-    role: '朋友',
-    access: '加入后需管理员授权',
-    status: '待确认',
+  await withLoading(async () => {
+    await api.inviteMember(activeSpaceId.value, { nickname: invitePhone.value.trim(), role: 'FRIEND' });
+    invitePhone.value = '';
+    const detail = await api.getSpace(activeSpaceId.value);
+    members.value = (detail.members || []).map(mapMember);
+    showToast('邀请已创建，等待确认');
   });
-  invitePhone.value = '';
-  showToast('邀请已创建，等待确认');
+}
+
+function mapEvent(event) {
+  const date = new Date(event.scheduledAt);
+  return {
+    ...event,
+    time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    date: date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }),
+    place: event.location || '待补充地点',
+    tag: event.needsCompanion ? '需要陪同' : '站内提醒',
+  };
+}
+
+function mapQuestion(question) {
+  return {
+    id: question.id,
+    text: question.question,
+    done: question.asked,
+    important: question.important,
+    answer: question.doctorAnswer,
+  };
+}
+
+function mapTask(task) {
+  const statusMap = { PENDING: '待认领', CLAIMED: '已认领', DONE: '已完成', CANCELLED: '已取消' };
+  return {
+    id: task.id,
+    title: task.title,
+    type: task.type,
+    time: task.scheduledAt ? new Date(task.scheduledAt).toLocaleString('zh-CN') : '待约定',
+    desc: task.description || '暂无说明',
+    status: statusMap[task.status] || task.status,
+    claimedBy: task.claimedBy || '',
+  };
+}
+
+function mapMessage(message) {
+  return {
+    text: message.text,
+    author: message.author,
+    time: new Date(message.createdAt).toLocaleString('zh-CN'),
+  };
+}
+
+function mapNote(note) {
+  return {
+    title: note.title,
+    type: note.type,
+    desc: new Date(note.createdAt).toLocaleString('zh-CN'),
+    visibility: note.visibility === 'PATIENT_ADMIN' ? '患者和管理员可见' : '空间成员可见',
+  };
+}
+
+function mapMember(member) {
+  const roleMap = {
+    PATIENT_ADMIN: '患者/管理员',
+    FAMILY: '家属',
+    FRIEND: '朋友',
+    READONLY: '只读成员',
+  };
+  const statusMap = {
+    ACTIVE: '已加入',
+    PENDING: '待确认',
+    REMOVED: '已移除',
+  };
+  return {
+    name: member.nickname,
+    role: roleMap[member.role] || member.role,
+    access: member.role === 'PATIENT_ADMIN' ? '完整管理权限' : '按空间授权访问',
+    status: statusMap[member.status] || member.status,
+  };
 }
 </script>
 
@@ -255,16 +474,73 @@ function inviteMember() {
       <section class="topbar">
         <div>
           <p class="eyebrow">{{ activeNav?.label || '今天' }}</p>
-          <h1>陪你一起过今天</h1>
+          <h1>{{ activeSpace?.name || '陪你一起过今天' }}</h1>
           <p class="lead">不用一个人记住所有事情。这里帮你整理复诊、身体感受、想问医生的问题，以及家人朋友可以接住的具体小事。</p>
         </div>
-        <div class="privacy-pill">
-          <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
-          仅自己和被授权成员可见
+        <div class="top-actions">
+          <div class="privacy-pill">
+            <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
+            仅自己和被授权成员可见
+          </div>
+          <button v-if="isAuthed" class="small-btn sage" type="button" @click="logout">{{ currentUser.nickname }} · 退出</button>
         </div>
       </section>
 
-      <section v-if="view === 'today'" class="page-grid">
+      <section v-if="!isAuthed" class="single-stack">
+        <article class="card auth-card">
+          <header class="card-header">
+            <div class="card-title">
+              <img class="icon" :src="iconLock" alt="" aria-hidden="true" />
+              <h2>{{ authMode === 'login' ? '登录陪伴空间' : '注册账号' }}</h2>
+            </div>
+            <span class="tag">数据写入后端数据库</span>
+          </header>
+          <div class="card-body">
+            <div class="auth-grid">
+              <input v-model="authForm.email" type="email" placeholder="邮箱，例如 927990956@qq.com" />
+              <input v-model="authForm.phone" type="text" placeholder="手机号，可选" />
+              <input v-if="authMode === 'register'" v-model="authForm.nickname" type="text" placeholder="昵称" />
+              <input v-model="authForm.password" type="password" placeholder="密码" />
+            </div>
+            <div class="form-row">
+              <button class="small-btn sage" type="button" :disabled="loading" @click="submitAuth">
+                {{ authMode === 'login' ? '登录' : '注册并登录' }}
+              </button>
+              <button class="small-btn" type="button" @click="authMode = authMode === 'login' ? 'register' : 'login'">
+                {{ authMode === 'login' ? '去注册' : '已有账号' }}
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section v-else-if="!hasSpace" class="single-stack">
+        <article class="card auth-card">
+          <header class="card-header">
+            <div class="card-title">
+              <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
+              <h2>创建陪伴空间</h2>
+            </div>
+            <span class="tag">第一位成员将成为管理员</span>
+          </header>
+          <div class="card-body">
+            <div class="auth-grid">
+              <input v-model="spaceForm.name" type="text" placeholder="空间名称" />
+              <input v-model="spaceForm.patientNickname" type="text" placeholder="患者昵称" />
+              <input v-model="spaceForm.description" type="text" placeholder="诊疗阶段备注，可选" />
+            </div>
+            <label class="consent-row">
+              <input v-model="privacyAccepted" type="checkbox" />
+              <span>我已了解这里会收集日程、身体记录、问题清单、任务、留言和资料文本，用于就诊整理和家庭协作。</span>
+            </label>
+            <div class="form-row">
+              <button class="small-btn sage" type="button" :disabled="!privacyAccepted || loading" @click="createSpace">创建空间</button>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section v-else-if="view === 'today'" class="page-grid">
         <div class="main-stack">
           <section class="quick-actions" aria-label="今天最需要什么">
             <button v-for="need in quickNeeds" :key="need.label" class="need-button" type="button" @click="saveNeed(need.label)">
@@ -279,10 +555,11 @@ function inviteMember() {
                 <img class="icon" :src="iconCalendar" alt="" aria-hidden="true" />
                 <h2>今日安排</h2>
               </div>
-              <span class="tag">下次复诊：6 月 18 日</span>
+              <span class="tag">下次复诊：{{ nextVisitLabel }}</span>
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
+                <p v-if="!events.length" class="empty-note">还没有日程。到“日历”页添加复诊、检查或用药提醒。</p>
                 <div v-for="event in events.slice(0, 3)" :key="event.title" class="schedule-row">
                   <strong class="time">{{ event.time }}</strong>
                   <div>
@@ -295,7 +572,7 @@ function inviteMember() {
               <div class="countdown">
                 <span>距离下次复诊</span>
                 <strong>9</strong>
-                <small>天后带齐资料和问题，不用临时回忆。</small>
+                  <small>把资料和问题提前整理好，不用临时回忆。</small>
                 <button class="small-btn" type="button" @click="go('folder')">整理复诊资料</button>
               </div>
             </div>
@@ -307,7 +584,7 @@ function inviteMember() {
                 <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
                 <h2>身体状态快捷记录</h2>
               </div>
-              <span class="tag">本地草稿</span>
+              <span class="tag">保存到数据库</span>
             </header>
             <div class="card-body">
               <div class="status-grid">
@@ -352,6 +629,7 @@ function inviteMember() {
               </div>
             </header>
             <div class="card-body mini-list">
+              <p v-if="!helpTasks.filter((item) => item.status === '待认领').length" class="empty-note">暂无待认领任务。</p>
               <div v-for="task in helpTasks.filter((item) => item.status === '待认领').slice(0, 3)" :key="task.title" class="mini-row">
                 <div>
                   <strong>{{ task.title }}</strong>
@@ -370,6 +648,7 @@ function inviteMember() {
               </div>
             </header>
             <div class="card-body message-list">
+              <p v-if="!messages.length" class="empty-note">还没有留言。</p>
               <div v-for="message in messages.slice(0, 2)" :key="message.text" class="message">
                 <p>{{ message.text }}</p>
                 <span>{{ message.author }} · {{ message.time }}</span>
@@ -389,6 +668,7 @@ function inviteMember() {
             <span class="tag">站内提醒</span>
           </header>
           <div class="card-body schedule full">
+            <p v-if="!events.length" class="empty-note">还没有日程。下方添加后会写入后端数据库。</p>
             <div v-for="event in events" :key="event.title" class="schedule-row">
               <strong class="time">{{ event.date }}<br />{{ event.time }}</strong>
               <div>
@@ -396,6 +676,17 @@ function inviteMember() {
                 <span>{{ event.place }} · {{ event.note }}</span>
               </div>
               <span class="tag">{{ event.tag }}</span>
+            </div>
+            <div class="event-form">
+              <input v-model="eventDraft.title" type="text" placeholder="日程标题，例如：门诊复查" />
+              <input v-model="eventDraft.scheduledAt" type="datetime-local" />
+              <input v-model="eventDraft.location" type="text" placeholder="地点" />
+              <input v-model="eventDraft.note" type="text" placeholder="备注，例如：带上报告和问题清单" />
+              <label class="inline-check">
+                <input v-model="eventDraft.needsCompanion" type="checkbox" />
+                <span>需要陪同</span>
+              </label>
+              <button class="small-btn sage" type="button" @click="addEvent">添加日程</button>
             </div>
           </div>
         </article>
@@ -449,7 +740,7 @@ function inviteMember() {
                 <strong>{{ question.text }}</strong>
                 <small v-if="question.answer">医生答复：{{ question.answer }}</small>
               </span>
-              <button class="mark-btn" :class="{ active: question.important }" type="button" @click.prevent="question.important = !question.important">
+              <button class="mark-btn" :class="{ active: question.important }" type="button" @click.prevent="toggleImportant(question)">
                 重要
               </button>
             </label>

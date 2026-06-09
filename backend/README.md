@@ -22,6 +22,15 @@ Implemented endpoint groups:
 - `GET/POST /api/spaces/:spaceId/messages`
 - `GET/POST /api/spaces/:spaceId/notes`
 
+## Where Data Is Added
+
+Data can be added from either:
+
+- the Vue web UI, which calls these `/api` endpoints after login
+- direct API calls, using the JWT returned by `/api/auth/login`
+
+All workspace data is stored in PostgreSQL. The backend does not keep business data in memory.
+
 ## Run Locally
 
 The API requires PostgreSQL. Create a database/user matching `.env.example`, then enable Flyway:
@@ -95,6 +104,19 @@ Authenticated requests must include:
 
 ```text
 Authorization: Bearer <token>
+```
+
+Example flow:
+
+```bash
+curl -X POST http://localhost:3000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"demo@example.com","nickname":"小洁","password":"change-me"}'
+
+curl -X POST http://localhost:3000/api/spaces \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <token>' \
+  -d '{"name":"陪你一起过今天","patientNickname":"小洁"}'
 ```
 
 ## Remaining Backend Work
