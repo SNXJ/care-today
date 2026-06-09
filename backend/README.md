@@ -4,11 +4,13 @@ Spring Boot API scaffold for CareToday.
 
 ## Current Scope
 
-This backend currently provides REST endpoint shapes with in-memory storage. It is intended to lock down the first API contract before wiring a real database and authentication layer.
+This backend provides the first Spring Boot API implementation for CareToday. It uses JWT authentication, BCrypt password hashing, Flyway migrations, PostgreSQL persistence, and space membership checks.
 
 Implemented endpoint groups:
 
 - `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
 - `GET/POST /api/spaces`
 - `GET /api/spaces/:spaceId`
 - `POST /api/spaces/:spaceId/members`
@@ -21,6 +23,16 @@ Implemented endpoint groups:
 - `GET/POST /api/spaces/:spaceId/notes`
 
 ## Run Locally
+
+The API requires PostgreSQL. Create a database/user matching `.env.example`, then enable Flyway:
+
+```bash
+export DATABASE_URL=jdbc:postgresql://localhost:5432/care_today
+export DATABASE_USER=care_today
+export DATABASE_PASSWORD=care_today_password
+export FLYWAY_ENABLED=true
+export JWT_SECRET=replace-with-a-long-random-secret
+```
 
 ```bash
 cd backend
@@ -43,20 +55,55 @@ java -jar target/care-today-backend-0.1.0.jar
 
 ## Database
 
-PostgreSQL schema draft:
+PostgreSQL schema and Flyway migration:
 
 ```text
 backend/database/schema.sql
+backend/src/main/resources/db/migration/V1__init.sql
 ```
 
-The first real persistence pass should add:
+Persisted tables:
 
-- Spring Data JDBC or JPA repositories
-- migrations with Flyway or Liquibase
-- password hashing
-- JWT authentication
-- space membership authorization filters
-- audit log writes for sensitive operations
+- `users`
+- `care_spaces`
+- `space_members`
+- `events`
+- `body_records`
+- `doctor_questions`
+- `help_tasks`
+- `messages`
+- `notes`
+- `audit_logs`
+
+Every `/api/spaces/:spaceId/**` endpoint requires the caller to be an active member of that space. Member invitation requires `PATIENT_ADMIN`.
+
+## Auth
+
+Register:
+
+```http
+POST /api/auth/register
+```
+
+Login:
+
+```http
+POST /api/auth/login
+```
+
+Authenticated requests must include:
+
+```text
+Authorization: Bearer <token>
+```
+
+## Remaining Backend Work
+
+- member join/accept flow
+- edit/delete endpoints
+- account deletion and space exit
+- request-level audit metadata such as IP and user agent
+- automated API tests
 
 ## Medical Boundary
 

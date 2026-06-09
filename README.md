@@ -17,14 +17,17 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 当前状态
 
-当前仓库处于早期原型阶段，已包含一个 Vue 3 + Vite Web 原型页面，以及独立的 CareToday 设计风格标准预览：
+当前仓库处于第一版开发阶段，已包含 Vue 3 + Vite Web 原型、Spring Boot 后端 API、PostgreSQL schema 和独立的 CareToday 设计风格标准预览：
 
 - `index.html`：Vue 应用入口
+- `backend/`：Spring Boot 3 Java 后端
+- `backend/src/main/resources/db/migration/V1__init.sql`：Flyway 数据库迁移
+- `deploy/docker-compose.yml`：PostgreSQL、后端、Nginx 部署骨架
 - `design-preview/index.html`：设计风格标准页面
 - `design-preview/preview.png`：Web 原型桌面端截图
 - `design-preview/preview-mobile.png`：Web 原型移动端截图
 
-后续计划迁移为 Vue 3 Web 应用，并接入后端 API 和服务端数据库。
+后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化和审计日志写入。前端仍以本地模拟数据为主，下一步需要做前后端联调。
 
 ## 页面截图
 
@@ -74,11 +77,12 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 技术规划
 
-第一版建议技术栈：
+第一版当前技术栈：
 
 - Frontend: Vue 3 + Vite
-- Backend: Spring Boot 3 或 Node.js/NestJS
-- Database: MySQL 或 PostgreSQL
+- Backend: Spring Boot 3 + Java 17
+- Database: PostgreSQL + Flyway
+- Auth: JWT + BCrypt
 - Deploy: Nginx + HTTPS + Docker Compose
 
 二期可考虑：
@@ -116,6 +120,25 @@ npm run dev
 http://localhost:5173
 ```
 
+后端本地构建：
+
+```bash
+cd backend
+mvn clean package
+```
+
+后端运行需要 PostgreSQL。配置示例见：
+
+```text
+backend/.env.example
+```
+
+后端 API 基础地址：
+
+```text
+http://localhost:3000/api
+```
+
 ## 医疗边界
 
 CareToday 仅用于生活陪伴、就诊整理和家庭协作。
@@ -140,6 +163,8 @@ CareToday 仅用于生活陪伴、就诊整理和家庭协作。
 ```text
 care-today/
   index.html                Vue 应用入口
+  backend/                  Spring Boot 3 后端 API
+  deploy/                   Docker Compose、Nginx、备份脚本
   患者陪伴需求文档.md        产品需求文档
   README.md                 项目说明
   docs/design-style-guide.md 设计风格规范文档
@@ -148,15 +173,12 @@ care-today/
   design-preview/preview-mobile.png Web 原型移动端截图
 ```
 
-后续推荐结构：
+当前后续重点：
 
-```text
-care-today/
-  frontend/                 Vue 3 Web
-  backend/                  API 服务
-  deploy/                   Nginx、Docker Compose、备份脚本
-  docs/                     需求、接口、部署文档
-```
+- 前后端真实联调。
+- 完善成员加入/退出、删除和编辑接口。
+- 增加权限测试和接口测试。
+- 配置 HTTPS 生产部署。
 
 ## License
 
