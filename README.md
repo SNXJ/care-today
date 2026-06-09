@@ -21,13 +21,20 @@ CareToday 希望把这些事变得更清楚一点：
 
 - `index.html`：Vue 应用入口
 - `design-preview/index.html`：设计风格标准页面
-- `design-preview/preview.png`：设计风格标准截图
+- `design-preview/preview.png`：Web 原型桌面端截图
+- `design-preview/preview-mobile.png`：Web 原型移动端截图
 
 后续计划迁移为 Vue 3 Web 应用，并接入后端 API 和服务端数据库。
 
 ## 页面截图
 
-![CareToday 设计风格标准预览](design-preview/preview.png)
+桌面端：
+
+![CareToday Web 原型桌面端预览](design-preview/preview.png)
+
+移动端：
+
+![CareToday Web 原型移动端预览](design-preview/preview-mobile.png)
 
 ## 设计风格标准
 
@@ -137,7 +144,8 @@ care-today/
   README.md                 项目说明
   docs/design-style-guide.md 设计风格规范文档
   design-preview/index.html 设计风格标准页面
-  design-preview/preview.png 设计风格标准页面截图
+  design-preview/preview.png Web 原型桌面端截图
+  design-preview/preview-mobile.png Web 原型移动端截图
 ```
 
 后续推荐结构：
