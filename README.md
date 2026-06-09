@@ -15,20 +15,6 @@ CareToday 希望把这些事变得更清楚一点：
 - 复诊前可以更快整理问题、症状和资料。
 - 页面始终保持医疗边界，不替代医生意见。
 
-## 当前状态
-
-当前仓库处于第一版开发阶段，已包含 Vue 3 + Vite Web 原型、Spring Boot 后端 API、PostgreSQL schema 和独立的 CareToday 设计风格标准预览：
-
-- `index.html`：Vue 应用入口
-- `backend/`：Spring Boot 3 Java 后端
-- `backend/src/main/resources/db/migration/V1__init.sql`：Flyway 数据库迁移
-- `deploy/docker-compose.yml`：PostgreSQL、后端、Nginx 部署骨架
-- `design-preview/index.html`：设计风格标准页面
-- `design-preview/preview.png`：Web 原型桌面端截图
-- `design-preview/preview-mobile.png`：Web 原型移动端截图
-
-后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化和审计日志写入。前端已接入基础 API：登录/注册、创建空间、加载空间数据，以及添加日程、身体记录、问医生问题、帮忙任务、留言、资料和邀请成员。
-
 ## 页面截图
 
 桌面端：
@@ -38,6 +24,20 @@ CareToday 希望把这些事变得更清楚一点：
 移动端：
 
 ![CareToday Web 原型移动端预览](design-preview/preview-mobile.png)
+
+## 当前状态
+
+当前仓库处于第一版开发阶段，已包含 Vue 3 + Vite Web 原型、Spring Boot 后端 API、MySQL schema 和独立的 CareToday 设计风格标准预览：
+
+- `index.html`：Vue 应用入口
+- `backend/`：Spring Boot 3 Java 后端
+- `backend/src/main/resources/db/migration/V1__init.sql`：Flyway 数据库迁移
+- `deploy/docker-compose.yml`：MySQL、后端、Nginx 部署骨架
+- `design-preview/index.html`：设计风格标准页面
+- `design-preview/preview.png`：Web 原型桌面端截图
+- `design-preview/preview-mobile.png`：Web 原型移动端截图
+
+后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化和审计日志写入。前端已接入基础 API：登录/注册、创建空间、加载空间数据，以及添加日程、身体记录、问医生问题、帮忙任务、留言、资料和邀请成员。
 
 ## 设计风格标准
 
@@ -81,7 +81,7 @@ CareToday 希望把这些事变得更清楚一点：
 
 - Frontend: Vue 3 + Vite
 - Backend: Spring Boot 3 + Java 17
-- Database: PostgreSQL + Flyway
+- Database: MySQL 8 + Flyway
 - Auth: JWT + BCrypt
 - Deploy: Nginx + HTTPS + Docker Compose
 
@@ -127,7 +127,7 @@ cd backend
 mvn clean package
 ```
 
-后端运行需要 PostgreSQL。配置示例见：
+后端运行需要 MySQL 8。配置示例见：
 
 ```text
 backend/.env.example
@@ -143,7 +143,7 @@ http://localhost:3000/api
 
 当前数据有两个入口：
 
-- Web 页面添加：登录后先创建陪伴空间，再在页面里添加日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。前端会调用 `/api`，数据写入 PostgreSQL。
+- Web 页面添加：登录后先创建陪伴空间，再在页面里添加日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。前端会调用 `/api`，数据写入 MySQL。
 - API 添加：可以直接调用 Spring Boot 后端接口，例如 `POST /api/auth/register`、`POST /api/spaces`、`POST /api/spaces/{spaceId}/events`。除注册和登录外，请求需要带 `Authorization: Bearer <token>`。
 
 本地开发时，前端默认请求同源 `/api`。如果后端单独运行在 `http://localhost:3000`，可以配置：
@@ -188,13 +188,7 @@ care-today/
   design-preview/preview-mobile.png Web 原型移动端截图
 ```
 
-当前后续重点：
-
-- 前后端真实联调。
-- 完善成员加入/退出、删除和编辑接口。
-- 增加权限测试和接口测试。
-- 配置 HTTPS 生产部署。
 
 ## License
 
-暂未指定开源协议。正式开源前建议补充 `LICENSE` 文件。
+只要能帮助病患减轻一部分疼痛，得到陪伴和帮助，减轻负担。随意......

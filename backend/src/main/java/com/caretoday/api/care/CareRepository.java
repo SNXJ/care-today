@@ -46,36 +46,38 @@ public class CareRepository {
         ORDER BY s.created_at DESC
         """,
         (rs, rowNum) -> mapSpace(rs),
-        userId);
+        id(userId));
   }
 
   public CareSpace createSpace(UUID userId, String name, String patientNickname, String description) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO care_spaces (name, patient_user_id, patient_nickname, description)
-        VALUES (?, ?, ?, ?)
-        RETURNING id, name, patient_nickname, description, created_at
+        INSERT INTO care_spaces (id, name, patient_user_id, patient_nickname, description)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapSpace(rs),
+        id(id),
         name,
-        userId,
+        id(userId),
         patientNickname,
         description);
+    return findSpace(id).orElseThrow();
   }
 
   public SpaceMember addMember(UUID spaceId, UUID userId, String nickname, MemberRole role, MemberStatus status) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO space_members (space_id, user_id, nickname, role, status)
-        VALUES (?, ?, ?, ?::member_role, ?::member_status)
-        RETURNING id, space_id, nickname, role, status, joined_at
+        INSERT INTO space_members (id, space_id, user_id, nickname, role, status)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapMember(rs),
-        spaceId,
-        userId,
+        id(id),
+        id(spaceId),
+        id(userId),
         nickname,
         role.name().toLowerCase(),
         status.name().toLowerCase());
+    return findMember(id).orElseThrow();
   }
 
   public Optional<CareSpace> findSpace(UUID spaceId) {
@@ -86,7 +88,7 @@ public class CareRepository {
             WHERE id = ? AND deleted_at IS NULL
             """,
             (rs, rowNum) -> mapSpace(rs),
-            spaceId)
+            id(spaceId))
         .stream()
         .findFirst();
   }
@@ -100,7 +102,20 @@ public class CareRepository {
         ORDER BY joined_at ASC
         """,
         (rs, rowNum) -> mapMember(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<SpaceMember> findMember(UUID memberId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, nickname, role, status, joined_at
+            FROM space_members
+            WHERE id = ?
+            """,
+            (rs, rowNum) -> mapMember(rs),
+            id(memberId))
+        .stream()
+        .findFirst();
   }
 
   public boolean isActiveMember(UUID spaceId, UUID userId) {
@@ -112,8 +127,8 @@ public class CareRepository {
         )
         """,
         Boolean.class,
-        spaceId,
-        userId);
+        id(spaceId),
+        id(userId));
     return Boolean.TRUE.equals(exists);
   }
 
@@ -126,8 +141,8 @@ public class CareRepository {
         )
         """,
         Boolean.class,
-        spaceId,
-        userId);
+        id(spaceId),
+        id(userId));
     return Boolean.TRUE.equals(exists);
   }
 
@@ -140,24 +155,38 @@ public class CareRepository {
         ORDER BY scheduled_at ASC
         """,
         (rs, rowNum) -> mapEvent(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<CareEvent> findEvent(UUID eventId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, title, scheduled_at, location, note, needs_companion, created_at
+            FROM events
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapEvent(rs),
+            id(eventId))
+        .stream()
+        .findFirst();
   }
 
   public CareEvent createEvent(UUID spaceId, UUID userId, CreateEventRequest request) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO events (space_id, title, scheduled_at, location, note, needs_companion, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        RETURNING id, space_id, title, scheduled_at, location, note, needs_companion, created_at
+        INSERT INTO events (id, space_id, title, scheduled_at, location, note, needs_companion, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapEvent(rs),
-        spaceId,
+        id(id),
+        id(spaceId),
         request.title(),
         Timestamp.from(request.scheduledAt()),
         request.location(),
         request.note(),
         request.needsCompanion(),
-        userId);
+        id(userId));
+    return findEvent(id).orElseThrow();
   }
 
   public List<BodyRecord> listBodyRecords(UUID spaceId) {
@@ -169,21 +198,34 @@ public class CareRepository {
         ORDER BY record_date DESC, created_at DESC
         """,
         (rs, rowNum) -> mapBodyRecord(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<BodyRecord> findBodyRecord(UUID recordId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
+            FROM body_records
+            WHERE id = ?
+            """,
+            (rs, rowNum) -> mapBodyRecord(rs),
+            id(recordId))
+        .stream()
+        .findFirst();
   }
 
   public BodyRecord createBodyRecord(UUID spaceId, UUID userId, CreateBodyRecordRequest request) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
         INSERT INTO body_records (
-          space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date
+          id, space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        RETURNING id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapBodyRecord(rs),
-        spaceId,
-        userId,
+        id(id),
+        id(spaceId),
+        id(userId),
         request.painScore(),
         request.fatigueScore(),
         request.sleepScore(),
@@ -192,6 +234,7 @@ public class CareRepository {
         request.temperature(),
         request.note(),
         request.recordDate());
+    return findBodyRecord(id).orElseThrow();
   }
 
   public List<DoctorQuestion> listDoctorQuestions(UUID spaceId) {
@@ -203,42 +246,53 @@ public class CareRepository {
         ORDER BY important DESC, created_at DESC
         """,
         (rs, rowNum) -> mapDoctorQuestion(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<DoctorQuestion> findDoctorQuestion(UUID questionId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, question, asked, important, doctor_answer, created_at
+            FROM doctor_questions
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapDoctorQuestion(rs),
+            id(questionId))
+        .stream()
+        .findFirst();
   }
 
   public DoctorQuestion createDoctorQuestion(UUID spaceId, UUID userId, String question, boolean important) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO doctor_questions (space_id, question, important, created_by)
-        VALUES (?, ?, ?, ?)
-        RETURNING id, space_id, question, asked, important, doctor_answer, created_at
+        INSERT INTO doctor_questions (id, space_id, question, important, created_by)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapDoctorQuestion(rs),
-        spaceId,
+        id(id),
+        id(spaceId),
         question,
         important,
-        userId);
+        id(userId));
+    return findDoctorQuestion(id).orElseThrow();
   }
 
   public Optional<DoctorQuestion> updateDoctorQuestion(UUID spaceId, UUID questionId, Boolean asked, String doctorAnswer, Boolean important) {
-    return jdbcTemplate.query(
+    int updated = jdbcTemplate.update(
             """
             UPDATE doctor_questions
             SET asked = COALESCE(?, asked),
                 doctor_answer = COALESCE(?, doctor_answer),
                 important = COALESCE(?, important),
-                updated_at = now()
+                updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = ? AND space_id = ? AND deleted_at IS NULL
-            RETURNING id, space_id, question, asked, important, doctor_answer, created_at
             """,
-            (rs, rowNum) -> mapDoctorQuestion(rs),
             asked,
             doctorAnswer,
             important,
-            questionId,
-            spaceId)
-        .stream()
-        .findFirst();
+            id(questionId),
+            id(spaceId));
+    return updated == 0 ? Optional.empty() : findDoctorQuestion(questionId);
   }
 
   public List<HelpTask> listHelpTasks(UUID spaceId) {
@@ -248,42 +302,54 @@ public class CareRepository {
         FROM help_tasks t
         LEFT JOIN users u ON u.id = t.claimed_by
         WHERE t.space_id = ? AND t.deleted_at IS NULL
-        ORDER BY t.status ASC, t.scheduled_at ASC NULLS LAST, t.created_at DESC
+        ORDER BY t.status ASC, t.scheduled_at IS NULL ASC, t.scheduled_at ASC, t.created_at DESC
         """,
         (rs, rowNum) -> mapHelpTask(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<HelpTask> findHelpTask(UUID taskId) {
+    return jdbcTemplate.query(
+            """
+            SELECT t.id, t.space_id, t.title, t.type, t.scheduled_at, t.description, t.status, u.nickname AS claimed_by, t.created_at
+            FROM help_tasks t
+            LEFT JOIN users u ON u.id = t.claimed_by
+            WHERE t.id = ? AND t.deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapHelpTask(rs),
+            id(taskId))
+        .stream()
+        .findFirst();
   }
 
   public HelpTask createHelpTask(UUID spaceId, UUID userId, CreateHelpTaskRequest request) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO help_tasks (space_id, title, type, scheduled_at, description, created_by)
-        VALUES (?, ?, ?, ?, ?, ?)
-        RETURNING id, space_id, title, type, scheduled_at, description, status, NULL::text AS claimed_by, created_at
+        INSERT INTO help_tasks (id, space_id, title, type, scheduled_at, description, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapHelpTask(rs),
-        spaceId,
+        id(id),
+        id(spaceId),
         request.title(),
         request.type(),
         request.scheduledAt() == null ? null : Timestamp.from(request.scheduledAt()),
         request.description(),
-        userId);
+        id(userId));
+    return findHelpTask(id).orElseThrow();
   }
 
   public Optional<HelpTask> claimHelpTask(UUID spaceId, UUID taskId, UUID userId) {
-    return jdbcTemplate.query(
+    int updated = jdbcTemplate.update(
             """
             UPDATE help_tasks
-            SET claimed_by = ?, status = 'claimed', updated_at = now()
-            WHERE id = ? AND space_id = ? AND deleted_at IS NULL AND status = 'pending'
-            RETURNING id, space_id, title, type, scheduled_at, description, status, 'current-user'::text AS claimed_by, created_at
+            SET claimed_by = ?, status = 'claimed', updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = ? AND space_id = ? AND deleted_at IS NULL AND status = 'pending' 
             """,
-            (rs, rowNum) -> mapHelpTask(rs),
-            userId,
-            taskId,
-            spaceId)
-        .stream()
-        .findFirst();
+            id(userId),
+            id(taskId),
+            id(spaceId));
+    return updated == 0 ? Optional.empty() : findHelpTask(taskId);
   }
 
   public List<SupportMessage> listMessages(UUID spaceId) {
@@ -296,20 +362,35 @@ public class CareRepository {
         ORDER BY m.created_at DESC
         """,
         (rs, rowNum) -> mapMessage(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<SupportMessage> findMessage(UUID messageId) {
+    return jdbcTemplate.query(
+            """
+            SELECT m.id, m.space_id, m.text, COALESCE(u.nickname, '成员') AS author, m.created_at
+            FROM messages m
+            LEFT JOIN users u ON u.id = m.user_id
+            WHERE m.id = ? AND m.deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapMessage(rs),
+            id(messageId))
+        .stream()
+        .findFirst();
   }
 
   public SupportMessage createMessage(UUID spaceId, UUID userId, String text) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO messages (space_id, user_id, text)
-        VALUES (?, ?, ?)
-        RETURNING id, space_id, text, 'current-user'::text AS author, created_at
+        INSERT INTO messages (id, space_id, user_id, text)
+        VALUES (?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapMessage(rs),
-        spaceId,
-        userId,
+        id(id),
+        id(spaceId),
+        id(userId),
         text);
+    return findMessage(id).orElseThrow();
   }
 
   public List<CareNote> listNotes(UUID spaceId) {
@@ -321,23 +402,37 @@ public class CareRepository {
         ORDER BY created_at DESC
         """,
         (rs, rowNum) -> mapNote(rs),
-        spaceId);
+        id(spaceId));
+  }
+
+  public Optional<CareNote> findNote(UUID noteId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, title, type, content, visibility, created_at
+            FROM notes
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapNote(rs),
+            id(noteId))
+        .stream()
+        .findFirst();
   }
 
   public CareNote createNote(UUID spaceId, UUID userId, CreateNoteRequest request) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO notes (space_id, title, type, content, visibility, created_by)
-        VALUES (?, ?, ?, ?, ?::note_visibility, ?)
-        RETURNING id, space_id, title, type, content, visibility, created_at
+        INSERT INTO notes (id, space_id, title, type, content, visibility, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapNote(rs),
-        spaceId,
+        id(id),
+        id(spaceId),
         request.title(),
         request.type(),
         request.content(),
         request.visibility().name().toLowerCase(),
-        userId);
+        id(userId));
+    return findNote(id).orElseThrow();
   }
 
   public void audit(UUID spaceId, UUID userId, String action, String targetType, UUID targetId) {
@@ -346,16 +441,16 @@ public class CareRepository {
         INSERT INTO audit_logs (space_id, user_id, action, target_type, target_id)
         VALUES (?, ?, ?, ?, ?)
         """,
-        spaceId,
-        userId,
+        id(spaceId),
+        id(userId),
         action,
         targetType,
-        targetId);
+        id(targetId));
   }
 
   private CareSpace mapSpace(ResultSet rs) throws SQLException {
     return new CareSpace(
-        rs.getObject("id", UUID.class),
+        uuid(rs, "id"),
         rs.getString("name"),
         rs.getString("patient_nickname"),
         rs.getString("description"),
@@ -364,8 +459,8 @@ public class CareRepository {
 
   private SpaceMember mapMember(ResultSet rs) throws SQLException {
     return new SpaceMember(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("nickname"),
         MemberRole.valueOf(rs.getString("role").toUpperCase()),
         MemberStatus.valueOf(rs.getString("status").toUpperCase()),
@@ -374,8 +469,8 @@ public class CareRepository {
 
   private CareEvent mapEvent(ResultSet rs) throws SQLException {
     return new CareEvent(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("title"),
         toInstant(rs, "scheduled_at"),
         rs.getString("location"),
@@ -386,8 +481,8 @@ public class CareRepository {
 
   private BodyRecord mapBodyRecord(ResultSet rs) throws SQLException {
     return new BodyRecord(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getInt("pain_score"),
         rs.getInt("fatigue_score"),
         rs.getInt("sleep_score"),
@@ -401,8 +496,8 @@ public class CareRepository {
 
   private DoctorQuestion mapDoctorQuestion(ResultSet rs) throws SQLException {
     return new DoctorQuestion(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("question"),
         rs.getBoolean("asked"),
         rs.getBoolean("important"),
@@ -412,8 +507,8 @@ public class CareRepository {
 
   private HelpTask mapHelpTask(ResultSet rs) throws SQLException {
     return new HelpTask(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("title"),
         rs.getString("type"),
         rs.getTimestamp("scheduled_at") == null ? null : rs.getTimestamp("scheduled_at").toInstant(),
@@ -425,8 +520,8 @@ public class CareRepository {
 
   private SupportMessage mapMessage(ResultSet rs) throws SQLException {
     return new SupportMessage(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("text"),
         rs.getString("author"),
         toInstant(rs, "created_at"));
@@ -434,8 +529,8 @@ public class CareRepository {
 
   private CareNote mapNote(ResultSet rs) throws SQLException {
     return new CareNote(
-        rs.getObject("id", UUID.class),
-        rs.getObject("space_id", UUID.class),
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
         rs.getString("title"),
         rs.getString("type"),
         rs.getString("content"),
@@ -445,5 +540,13 @@ public class CareRepository {
 
   private Instant toInstant(ResultSet rs, String column) throws SQLException {
     return rs.getTimestamp(column).toInstant();
+  }
+
+  private UUID uuid(ResultSet rs, String column) throws SQLException {
+    return UUID.fromString(rs.getString(column));
+  }
+
+  private String id(UUID value) {
+    return value == null ? null : value.toString();
   }
 }

@@ -17,17 +17,18 @@ public class AuthRepository {
   }
 
   public UserRecord createUser(String phone, String email, String nickname, String passwordHash) {
-    return jdbcTemplate.queryForObject(
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
         """
-        INSERT INTO users (phone, email, nickname, password_hash)
-        VALUES (?, ?, ?, ?)
-        RETURNING id, phone, email, nickname, password_hash, created_at, last_login_at
+        INSERT INTO users (id, phone, email, nickname, password_hash)
+        VALUES (?, ?, ?, ?, ?)
         """,
-        (rs, rowNum) -> mapUser(rs),
+        id.toString(),
         blankToNull(phone),
         blankToNull(email),
         nickname,
         passwordHash);
+    return findById(id).orElseThrow();
   }
 
   public Optional<UserRecord> findByLogin(String phone, String email) {
@@ -61,18 +62,18 @@ public class AuthRepository {
             WHERE id = ? AND deleted_at IS NULL
             """,
             (rs, rowNum) -> mapUser(rs),
-            id)
+            id.toString())
         .stream()
         .findFirst();
   }
 
   public void touchLastLogin(UUID userId) {
-    jdbcTemplate.update("UPDATE users SET last_login_at = now() WHERE id = ?", userId);
+    jdbcTemplate.update("UPDATE users SET last_login_at = CURRENT_TIMESTAMP(3) WHERE id = ?", userId.toString());
   }
 
   private UserRecord mapUser(ResultSet rs) throws SQLException {
     return new UserRecord(
-        rs.getObject("id", UUID.class),
+        UUID.fromString(rs.getString("id")),
         rs.getString("phone"),
         rs.getString("email"),
         rs.getString("nickname"),
