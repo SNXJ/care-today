@@ -24,14 +24,13 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.http.HttpStatus;
 
 @Service
 public class CareService {
-  private final List<CareSpace> spaces = new ArrayList<>();
-  private final List<SpaceMember> members = new ArrayList<>();
+  private final CareRepository careRepository;
   private final List<CareEvent> events = new ArrayList<>();
   private final List<BodyRecord> bodyRecords = new ArrayList<>();
   private final List<DoctorQuestion> questions = new ArrayList<>();
@@ -39,51 +38,53 @@ public class CareService {
   private final List<SupportMessage> messages = new ArrayList<>();
   private final List<CareNote> notes = new ArrayList<>();
 
-  public List<CareSpace> listSpaces() {
-    return spaces;
+  public CareService(CareRepository careRepository) {
+    this.careRepository = careRepository;
   }
 
-  public CareSpace createSpace(CreateSpaceRequest request) {
-    Instant now = Instant.now();
-    CareSpace space = new CareSpace(UUID.randomUUID(), request.name(), request.patientNickname(), request.description(), now);
-    spaces.add(space);
-    members.add(new SpaceMember(UUID.randomUUID(), space.id(), request.patientNickname(), CareModels.MemberRole.PATIENT_ADMIN, MemberStatus.ACTIVE, now));
+  public List<CareSpace> listSpaces(UUID currentUserId) {
+    return careRepository.listSpacesForUser(currentUserId);
+  }
+
+  public CareSpace createSpace(UUID currentUserId, CreateSpaceRequest request) {
+    CareSpace space = careRepository.createSpace(currentUserId, request.name(), request.patientNickname(), request.description());
+    careRepository.addMember(space.id(), currentUserId, request.patientNickname(), CareModels.MemberRole.PATIENT_ADMIN, MemberStatus.ACTIVE);
     return space;
   }
 
-  public Map<String, Object> getSpace(UUID spaceId) {
-    CareSpace space = ensureSpace(spaceId);
+  public Map<String, Object> getSpace(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
+    CareSpace space = careRepository.findSpace(spaceId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Care space not found"));
     return Map.of(
         "space", space,
-        "members", members.stream().filter(member -> member.spaceId().equals(spaceId)).toList());
+        "members", careRepository.listMembers(spaceId));
   }
 
-  public SpaceMember inviteMember(UUID spaceId, InviteMemberRequest request) {
-    ensureSpace(spaceId);
-    SpaceMember member = new SpaceMember(UUID.randomUUID(), spaceId, request.nickname(), request.role(), MemberStatus.PENDING, Instant.now());
-    members.add(member);
-    return member;
+  public SpaceMember inviteMember(UUID currentUserId, UUID spaceId, InviteMemberRequest request) {
+    ensureAdmin(spaceId, currentUserId);
+    return careRepository.addMember(spaceId, null, request.nickname(), request.role(), MemberStatus.PENDING);
   }
 
-  public List<CareEvent> listEvents(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<CareEvent> listEvents(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return events.stream().filter(event -> event.spaceId().equals(spaceId)).toList();
   }
 
-  public CareEvent createEvent(UUID spaceId, CreateEventRequest request) {
-    ensureSpace(spaceId);
+  public CareEvent createEvent(UUID currentUserId, UUID spaceId, CreateEventRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     CareEvent event = new CareEvent(UUID.randomUUID(), spaceId, request.title(), request.scheduledAt(), request.location(), request.note(), request.needsCompanion(), Instant.now());
     events.add(event);
     return event;
   }
 
-  public List<BodyRecord> listBodyRecords(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<BodyRecord> listBodyRecords(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return bodyRecords.stream().filter(record -> record.spaceId().equals(spaceId)).toList();
   }
 
-  public Map<String, Object> createBodyRecord(UUID spaceId, CreateBodyRecordRequest request) {
-    ensureSpace(spaceId);
+  public Map<String, Object> createBodyRecord(UUID currentUserId, UUID spaceId, CreateBodyRecordRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     BodyRecord record = new BodyRecord(
         UUID.randomUUID(),
         spaceId,
@@ -102,20 +103,20 @@ public class CareService {
         "medicalBoundary", "This record is for review and appointment preparation only. It does not diagnose or assess treatment risk.");
   }
 
-  public List<DoctorQuestion> listDoctorQuestions(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<DoctorQuestion> listDoctorQuestions(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return questions.stream().filter(question -> question.spaceId().equals(spaceId)).toList();
   }
 
-  public DoctorQuestion createDoctorQuestion(UUID spaceId, CreateDoctorQuestionRequest request) {
-    ensureSpace(spaceId);
+  public DoctorQuestion createDoctorQuestion(UUID currentUserId, UUID spaceId, CreateDoctorQuestionRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     DoctorQuestion question = new DoctorQuestion(UUID.randomUUID(), spaceId, request.question(), false, request.important(), null, Instant.now());
     questions.add(question);
     return question;
   }
 
-  public DoctorQuestion updateDoctorQuestion(UUID spaceId, UUID questionId, UpdateDoctorQuestionRequest request) {
-    ensureSpace(spaceId);
+  public DoctorQuestion updateDoctorQuestion(UUID currentUserId, UUID spaceId, UUID questionId, UpdateDoctorQuestionRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     DoctorQuestion current = questions.stream()
         .filter(question -> question.spaceId().equals(spaceId) && question.id().equals(questionId))
         .findFirst()
@@ -132,20 +133,20 @@ public class CareService {
     return updated;
   }
 
-  public List<HelpTask> listHelpTasks(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<HelpTask> listHelpTasks(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return tasks.stream().filter(task -> task.spaceId().equals(spaceId)).toList();
   }
 
-  public HelpTask createHelpTask(UUID spaceId, CreateHelpTaskRequest request) {
-    ensureSpace(spaceId);
+  public HelpTask createHelpTask(UUID currentUserId, UUID spaceId, CreateHelpTaskRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     HelpTask task = new HelpTask(UUID.randomUUID(), spaceId, request.title(), request.type(), request.scheduledAt(), request.description(), HelpTaskStatus.PENDING, null, Instant.now());
     tasks.add(task);
     return task;
   }
 
-  public HelpTask claimHelpTask(UUID spaceId, UUID taskId) {
-    ensureSpace(spaceId);
+  public HelpTask claimHelpTask(UUID currentUserId, UUID spaceId, UUID taskId) {
+    ensureActiveMember(spaceId, currentUserId);
     HelpTask current = tasks.stream()
         .filter(task -> task.spaceId().equals(spaceId) && task.id().equals(taskId))
         .findFirst()
@@ -155,34 +156,42 @@ public class CareService {
     return updated;
   }
 
-  public List<SupportMessage> listMessages(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<SupportMessage> listMessages(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return messages.stream().filter(message -> message.spaceId().equals(spaceId)).toList();
   }
 
-  public SupportMessage createMessage(UUID spaceId, CreateMessageRequest request) {
-    ensureSpace(spaceId);
+  public SupportMessage createMessage(UUID currentUserId, UUID spaceId, CreateMessageRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     SupportMessage message = new SupportMessage(UUID.randomUUID(), spaceId, request.text(), "current-user", Instant.now());
     messages.add(message);
     return message;
   }
 
-  public List<CareNote> listNotes(UUID spaceId) {
-    ensureSpace(spaceId);
+  public List<CareNote> listNotes(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
     return notes.stream().filter(note -> note.spaceId().equals(spaceId)).toList();
   }
 
-  public CareNote createNote(UUID spaceId, CreateNoteRequest request) {
-    ensureSpace(spaceId);
+  public CareNote createNote(UUID currentUserId, UUID spaceId, CreateNoteRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
     CareNote note = new CareNote(UUID.randomUUID(), spaceId, request.title(), request.type(), request.content(), request.visibility(), Instant.now());
     notes.add(note);
     return note;
   }
 
-  private CareSpace ensureSpace(UUID spaceId) {
-    return spaces.stream()
-        .filter(space -> space.id().equals(spaceId))
-        .findFirst()
+  private void ensureActiveMember(UUID spaceId, UUID currentUserId) {
+    careRepository.findSpace(spaceId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Care space not found"));
+    if (!careRepository.isActiveMember(spaceId, currentUserId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "no access to this care space");
+    }
+  }
+
+  private void ensureAdmin(UUID spaceId, UUID currentUserId) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (!careRepository.isAdmin(spaceId, currentUserId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "admin permission required");
+    }
   }
 }
