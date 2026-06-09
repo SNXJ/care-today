@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: care-today-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/care_today}
+    username: ${DATABASE_USER:care_today}
+    password: ${DATABASE_PASSWORD:care_today_password}
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    locations: classpath:db/migration
 
 management:
   endpoints:
@@ -12,4 +19,5 @@ management:
         include: health
 
 care-today:
+  jwt-secret: ${JWT_SECRET:change-this-development-secret-to-a-long-random-value}
   medical-boundary: "CareToday only supports life companionship, appointment organization, and family collaboration. It does not provide diagnosis, treatment advice, or medication judgment."
