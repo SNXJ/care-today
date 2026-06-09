@@ -12,10 +12,20 @@ MYSQL_USER="${MYSQL_USER:-care_today}"
 MYSQL_PASSWORD="${MYSQL_PASSWORD:-care_today_password}"
 MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-care_today_root_password}"
 JWT_SECRET="${JWT_SECRET:-replace-with-a-long-random-secret}"
+CERT_DIR="$ROOT_DIR/deploy/certs"
 
 cd "$ROOT_DIR"
 npm run build
 (cd backend && mvn -q -DskipTests package)
+
+mkdir -p "$CERT_DIR"
+if [ ! -f "$CERT_DIR/localhost.crt" ] || [ ! -f "$CERT_DIR/localhost.key" ]; then
+  openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+    -keyout "$CERT_DIR/localhost.key" \
+    -out "$CERT_DIR/localhost.crt" \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1" >/dev/null 2>&1
+fi
 
 docker network inspect "$NETWORK" >/dev/null 2>&1 || docker network create "$NETWORK" >/dev/null
 
@@ -72,10 +82,21 @@ docker run -d \
   --name "$NGINX_CONTAINER" \
   --network "$NETWORK" \
   -p 8080:80 \
+  -p 8443:443 \
   -v "$ROOT_DIR/dist":/usr/share/nginx/html:ro \
   -v "$ROOT_DIR/deploy/nginx.conf":/etc/nginx/conf.d/default.conf:ro \
+  -v "$CERT_DIR":/etc/nginx/certs:ro \
   nginx:1.27-alpine >/dev/null
+
+echo "Waiting for Nginx..."
+for _ in $(seq 1 60); do
+  if curl -k -fsS https://localhost:8443/ >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
 
 echo "CareToday deployed:"
 echo "  Web: http://localhost:8080"
+echo "  HTTPS: https://localhost:8443"
 echo "  API: http://localhost:3000/api/health"

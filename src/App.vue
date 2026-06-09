@@ -107,8 +107,12 @@ const bodyRecordPayload = computed(() => ({
 }));
 
 onMounted(() => {
+  const invite = new URLSearchParams(window.location.search).get('invite');
+  if (invite) {
+    localStorage.setItem('care-today-invite', invite);
+  }
   if (isAuthed.value) {
-    loadSpaces();
+    loadSpaces().then(acceptPendingInvite);
   }
 });
 
@@ -154,6 +158,7 @@ async function submitAuth() {
     spaceForm.value.patientNickname = result.user.nickname;
     showToast(authMode.value === 'register' ? '注册成功' : '登录成功');
     await loadSpaces();
+    await acceptPendingInvite();
   });
 }
 
@@ -523,6 +528,29 @@ async function acceptMember(member) {
     members.value = (detail.members || []).map(mapMember);
     showToast('成员已确认加入');
   });
+}
+
+async function acceptPendingInvite() {
+  const invite = localStorage.getItem('care-today-invite');
+  if (!invite || !isAuthed.value) return;
+  const [spaceId, memberId] = invite.split(':');
+  if (!spaceId || !memberId) {
+    localStorage.removeItem('care-today-invite');
+    return;
+  }
+  await withLoading(async () => {
+    await api.acceptMember(spaceId, memberId);
+    localStorage.removeItem('care-today-invite');
+    window.history.replaceState({}, document.title, window.location.pathname);
+    await loadSpaces();
+    showToast('已加入陪伴空间');
+  });
+}
+
+async function copyInviteLink(member) {
+  const url = `${window.location.origin}${window.location.pathname}?invite=${activeSpaceId.value}:${member.id}`;
+  await navigator.clipboard.writeText(url);
+  showToast('邀请链接已复制');
 }
 
 async function removeMember(member) {
@@ -1067,7 +1095,7 @@ function mapMember(member) {
                 </div>
                 <div class="row-actions">
                   <span class="tag">{{ member.status }}</span>
-                  <button v-if="member.status === '待确认'" class="small-btn sage" type="button" @click="acceptMember(member)">确认</button>
+                  <button v-if="member.status === '待确认'" class="small-btn sage" type="button" @click="copyInviteLink(member)">复制邀请</button>
                   <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
                 </div>
               </div>
