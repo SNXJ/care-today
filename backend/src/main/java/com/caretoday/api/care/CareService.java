@@ -6,7 +6,6 @@ import com.caretoday.api.care.CareModels.CareNote;
 import com.caretoday.api.care.CareModels.CareSpace;
 import com.caretoday.api.care.CareModels.DoctorQuestion;
 import com.caretoday.api.care.CareModels.HelpTask;
-import com.caretoday.api.care.CareModels.HelpTaskStatus;
 import com.caretoday.api.care.CareModels.MemberStatus;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
@@ -19,8 +18,6 @@ import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
 import com.caretoday.api.care.CareRequests.UpdateDoctorQuestionRequest;
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,12 +28,6 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class CareService {
   private final CareRepository careRepository;
-  private final List<CareEvent> events = new ArrayList<>();
-  private final List<BodyRecord> bodyRecords = new ArrayList<>();
-  private final List<DoctorQuestion> questions = new ArrayList<>();
-  private final List<HelpTask> tasks = new ArrayList<>();
-  private final List<SupportMessage> messages = new ArrayList<>();
-  private final List<CareNote> notes = new ArrayList<>();
 
   public CareService(CareRepository careRepository) {
     this.careRepository = careRepository;
@@ -49,6 +40,7 @@ public class CareService {
   public CareSpace createSpace(UUID currentUserId, CreateSpaceRequest request) {
     CareSpace space = careRepository.createSpace(currentUserId, request.name(), request.patientNickname(), request.description());
     careRepository.addMember(space.id(), currentUserId, request.patientNickname(), CareModels.MemberRole.PATIENT_ADMIN, MemberStatus.ACTIVE);
+    careRepository.audit(space.id(), currentUserId, "space.create", "care_space", space.id());
     return space;
   }
 
@@ -63,41 +55,32 @@ public class CareService {
 
   public SpaceMember inviteMember(UUID currentUserId, UUID spaceId, InviteMemberRequest request) {
     ensureAdmin(spaceId, currentUserId);
-    return careRepository.addMember(spaceId, null, request.nickname(), request.role(), MemberStatus.PENDING);
+    SpaceMember member = careRepository.addMember(spaceId, null, request.nickname(), request.role(), MemberStatus.PENDING);
+    careRepository.audit(spaceId, currentUserId, "member.invite", "space_member", member.id());
+    return member;
   }
 
   public List<CareEvent> listEvents(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return events.stream().filter(event -> event.spaceId().equals(spaceId)).toList();
+    return careRepository.listEvents(spaceId);
   }
 
   public CareEvent createEvent(UUID currentUserId, UUID spaceId, CreateEventRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    CareEvent event = new CareEvent(UUID.randomUUID(), spaceId, request.title(), request.scheduledAt(), request.location(), request.note(), request.needsCompanion(), Instant.now());
-    events.add(event);
+    CareEvent event = careRepository.createEvent(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "event.create", "event", event.id());
     return event;
   }
 
   public List<BodyRecord> listBodyRecords(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return bodyRecords.stream().filter(record -> record.spaceId().equals(spaceId)).toList();
+    return careRepository.listBodyRecords(spaceId);
   }
 
   public Map<String, Object> createBodyRecord(UUID currentUserId, UUID spaceId, CreateBodyRecordRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    BodyRecord record = new BodyRecord(
-        UUID.randomUUID(),
-        spaceId,
-        request.painScore(),
-        request.fatigueScore(),
-        request.sleepScore(),
-        request.moodScore(),
-        request.appetiteScore(),
-        request.temperature(),
-        request.note(),
-        request.recordDate(),
-        Instant.now());
-    bodyRecords.add(record);
+    BodyRecord record = careRepository.createBodyRecord(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "body_record.create", "body_record", record.id());
     return Map.of(
         "record", record,
         "medicalBoundary", "This record is for review and appointment preparation only. It does not diagnose or assess treatment risk.");
@@ -105,78 +88,70 @@ public class CareService {
 
   public List<DoctorQuestion> listDoctorQuestions(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return questions.stream().filter(question -> question.spaceId().equals(spaceId)).toList();
+    return careRepository.listDoctorQuestions(spaceId);
   }
 
   public DoctorQuestion createDoctorQuestion(UUID currentUserId, UUID spaceId, CreateDoctorQuestionRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    DoctorQuestion question = new DoctorQuestion(UUID.randomUUID(), spaceId, request.question(), false, request.important(), null, Instant.now());
-    questions.add(question);
+    DoctorQuestion question = careRepository.createDoctorQuestion(spaceId, currentUserId, request.question(), request.important());
+    careRepository.audit(spaceId, currentUserId, "doctor_question.create", "doctor_question", question.id());
     return question;
   }
 
   public DoctorQuestion updateDoctorQuestion(UUID currentUserId, UUID spaceId, UUID questionId, UpdateDoctorQuestionRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    DoctorQuestion current = questions.stream()
-        .filter(question -> question.spaceId().equals(spaceId) && question.id().equals(questionId))
-        .findFirst()
+    DoctorQuestion question = careRepository.updateDoctorQuestion(
+            spaceId,
+            questionId,
+            request.asked(),
+            request.doctorAnswer(),
+            request.important())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Doctor question not found"));
-    DoctorQuestion updated = new DoctorQuestion(
-        current.id(),
-        current.spaceId(),
-        current.question(),
-        request.asked() == null ? current.asked() : request.asked(),
-        request.important() == null ? current.important() : request.important(),
-        request.doctorAnswer() == null ? current.doctorAnswer() : request.doctorAnswer(),
-        current.createdAt());
-    questions.set(questions.indexOf(current), updated);
-    return updated;
+    careRepository.audit(spaceId, currentUserId, "doctor_question.update", "doctor_question", question.id());
+    return question;
   }
 
   public List<HelpTask> listHelpTasks(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return tasks.stream().filter(task -> task.spaceId().equals(spaceId)).toList();
+    return careRepository.listHelpTasks(spaceId);
   }
 
   public HelpTask createHelpTask(UUID currentUserId, UUID spaceId, CreateHelpTaskRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    HelpTask task = new HelpTask(UUID.randomUUID(), spaceId, request.title(), request.type(), request.scheduledAt(), request.description(), HelpTaskStatus.PENDING, null, Instant.now());
-    tasks.add(task);
+    HelpTask task = careRepository.createHelpTask(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "help_task.create", "help_task", task.id());
     return task;
   }
 
   public HelpTask claimHelpTask(UUID currentUserId, UUID spaceId, UUID taskId) {
     ensureActiveMember(spaceId, currentUserId);
-    HelpTask current = tasks.stream()
-        .filter(task -> task.spaceId().equals(spaceId) && task.id().equals(taskId))
-        .findFirst()
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Help task not found"));
-    HelpTask updated = new HelpTask(current.id(), current.spaceId(), current.title(), current.type(), current.scheduledAt(), current.description(), HelpTaskStatus.CLAIMED, "current-user", current.createdAt());
-    tasks.set(tasks.indexOf(current), updated);
-    return updated;
+    HelpTask task = careRepository.claimHelpTask(spaceId, taskId, currentUserId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Help task not found or already claimed"));
+    careRepository.audit(spaceId, currentUserId, "help_task.claim", "help_task", task.id());
+    return task;
   }
 
   public List<SupportMessage> listMessages(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return messages.stream().filter(message -> message.spaceId().equals(spaceId)).toList();
+    return careRepository.listMessages(spaceId);
   }
 
   public SupportMessage createMessage(UUID currentUserId, UUID spaceId, CreateMessageRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    SupportMessage message = new SupportMessage(UUID.randomUUID(), spaceId, request.text(), "current-user", Instant.now());
-    messages.add(message);
+    SupportMessage message = careRepository.createMessage(spaceId, currentUserId, request.text());
+    careRepository.audit(spaceId, currentUserId, "message.create", "message", message.id());
     return message;
   }
 
   public List<CareNote> listNotes(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return notes.stream().filter(note -> note.spaceId().equals(spaceId)).toList();
+    return careRepository.listNotes(spaceId);
   }
 
   public CareNote createNote(UUID currentUserId, UUID spaceId, CreateNoteRequest request) {
     ensureActiveMember(spaceId, currentUserId);
-    CareNote note = new CareNote(UUID.randomUUID(), spaceId, request.title(), request.type(), request.content(), request.visibility(), Instant.now());
-    notes.add(note);
+    CareNote note = careRepository.createNote(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "note.create", "note", note.id());
     return note;
   }
 
