@@ -507,6 +507,21 @@ textarea {
   border-color: var(--sage-soft);
 }
 
+.small-btn.danger,
+.mark-btn.danger {
+  color: #a54e58;
+  background: #fff4f5;
+  border-color: #f1c8cd;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
 .compact-list {
   display: grid;
   gap: 8px;
@@ -581,7 +596,7 @@ textarea {
 
 .check-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr auto auto auto;
   gap: 10px;
   align-items: flex-start;
   padding: 12px;
@@ -913,6 +928,11 @@ textarea {
     white-space: normal;
   }
 
+  .schedule-row .row-actions {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
   .status-grid,
   .status-grid.large,
   .help-grid {
@@ -940,6 +960,10 @@ textarea {
   .check-row .mark-btn {
     grid-column: 2;
     width: max-content;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 
   .file-row {

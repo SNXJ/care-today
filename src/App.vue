@@ -74,6 +74,7 @@ const api = createApi(() => token.value);
 const spaces = ref([]);
 const activeSpace = ref(null);
 const events = ref([]);
+const bodyRecordItems = ref([]);
 
 const bodyRecords = ref([
   { label: '疼痛', value: 3 },
@@ -218,6 +219,7 @@ async function loadEvents() {
 
 async function loadBodyRecords() {
   const records = await api.listBodyRecords(activeSpaceId.value);
+  bodyRecordItems.value = records;
   const latest = records[0];
   if (latest) {
     bodyRecords.value = [
@@ -261,7 +263,34 @@ async function saveStatus() {
     const result = await api.createBodyRecord(activeSpaceId.value, bodyRecordPayload.value);
     statusNote.value = result.record.note || '';
     statusDraft.value = '';
+    await loadBodyRecords();
     showToast('身体记录已保存到数据库');
+  });
+}
+
+async function editLatestBodyRecord() {
+  const latest = bodyRecordItems.value[0];
+  if (!latest) {
+    showToast('还没有身体记录');
+    return;
+  }
+  const note = window.prompt('修改最近身体记录备注', latest.note || '');
+  if (note === null) return;
+  await withLoading(async () => {
+    await api.updateBodyRecord(activeSpaceId.value, latest.id, { note });
+    await loadBodyRecords();
+    showToast('身体记录已更新');
+  });
+}
+
+async function deleteLatestBodyRecord() {
+  const latest = bodyRecordItems.value[0];
+  if (!latest || !window.confirm('删除最近一条身体记录？')) return;
+  await withLoading(async () => {
+    await api.deleteBodyRecord(activeSpaceId.value, latest.id);
+    statusNote.value = '';
+    await loadBodyRecords();
+    showToast('身体记录已删除');
   });
 }
 
@@ -297,10 +326,58 @@ async function addEvent() {
   });
 }
 
+async function editEvent(event) {
+  const title = window.prompt('修改日程标题', event.title);
+  if (title === null || !title.trim()) return;
+  const location = window.prompt('修改地点', event.location || '') ?? event.location;
+  const note = window.prompt('修改备注', event.note || '') ?? event.note;
+  await withLoading(async () => {
+    await api.updateEvent(activeSpaceId.value, event.id, {
+      title: title.trim(),
+      location: location?.trim() || '',
+      note: note?.trim() || '',
+    });
+    await loadEvents();
+    showToast('日程已更新');
+  });
+}
+
+async function deleteEvent(event) {
+  if (!window.confirm(`删除日程“${event.title}”？`)) return;
+  await withLoading(async () => {
+    await api.deleteEvent(activeSpaceId.value, event.id);
+    await loadEvents();
+    showToast('日程已删除');
+  });
+}
+
 async function toggleImportant(question) {
   await withLoading(async () => {
     await api.updateDoctorQuestion(activeSpaceId.value, question.id, { important: !question.important });
     await loadQuestions();
+  });
+}
+
+async function editQuestion(question) {
+  const text = window.prompt('修改问题', question.text);
+  if (text === null || !text.trim()) return;
+  const answer = window.prompt('医生答复，可留空', question.answer || '');
+  await withLoading(async () => {
+    await api.updateDoctorQuestion(activeSpaceId.value, question.id, {
+      question: text.trim(),
+      doctorAnswer: answer ?? question.answer ?? '',
+    });
+    await loadQuestions();
+    showToast('问题已更新');
+  });
+}
+
+async function deleteQuestion(question) {
+  if (!window.confirm('删除这个问题？')) return;
+  await withLoading(async () => {
+    await api.deleteDoctorQuestion(activeSpaceId.value, question.id);
+    await loadQuestions();
+    showToast('问题已删除');
   });
 }
 
@@ -309,6 +386,29 @@ async function claimTask(task) {
     await api.claimHelpTask(activeSpaceId.value, task.id);
     await loadHelpTasks();
     showToast('已认领这件事');
+  });
+}
+
+async function editTask(task) {
+  const title = window.prompt('修改任务标题', task.title);
+  if (title === null || !title.trim()) return;
+  const description = window.prompt('修改任务说明', task.desc || '');
+  await withLoading(async () => {
+    await api.updateHelpTask(activeSpaceId.value, task.id, {
+      title: title.trim(),
+      description: description ?? task.desc,
+    });
+    await loadHelpTasks();
+    showToast('任务已更新');
+  });
+}
+
+async function deleteTask(task) {
+  if (!window.confirm(`删除任务“${task.title}”？`)) return;
+  await withLoading(async () => {
+    await api.deleteHelpTask(activeSpaceId.value, task.id);
+    await loadHelpTasks();
+    showToast('任务已删除');
   });
 }
 
@@ -342,6 +442,25 @@ async function addMessage() {
   });
 }
 
+async function editMessage(message) {
+  const text = window.prompt('修改留言', message.text);
+  if (text === null || !text.trim()) return;
+  await withLoading(async () => {
+    await api.updateMessage(activeSpaceId.value, message.id, { text: text.trim() });
+    await loadMessages();
+    showToast('留言已更新');
+  });
+}
+
+async function deleteMessage(message) {
+  if (!window.confirm('删除这条留言？')) return;
+  await withLoading(async () => {
+    await api.deleteMessage(activeSpaceId.value, message.id);
+    await loadMessages();
+    showToast('留言已删除');
+  });
+}
+
 async function addNote() {
   if (!noteDraft.value.trim()) {
     showToast('先写一个资料名称');
@@ -360,6 +479,29 @@ async function addNote() {
   });
 }
 
+async function editNote(note) {
+  const title = window.prompt('修改资料标题', note.title);
+  if (title === null || !title.trim()) return;
+  const content = window.prompt('修改资料内容', note.content || '');
+  await withLoading(async () => {
+    await api.updateNote(activeSpaceId.value, note.id, {
+      title: title.trim(),
+      content: content ?? note.content ?? '',
+    });
+    await loadNotes();
+    showToast('资料已更新');
+  });
+}
+
+async function deleteNote(note) {
+  if (!window.confirm(`删除资料“${note.title}”？`)) return;
+  await withLoading(async () => {
+    await api.deleteNote(activeSpaceId.value, note.id);
+    await loadNotes();
+    showToast('资料已删除');
+  });
+}
+
 async function inviteMember() {
   if (!invitePhone.value.trim()) {
     showToast('先填写手机号或备注名');
@@ -371,6 +513,46 @@ async function inviteMember() {
     const detail = await api.getSpace(activeSpaceId.value);
     members.value = (detail.members || []).map(mapMember);
     showToast('邀请已创建，等待确认');
+  });
+}
+
+async function acceptMember(member) {
+  await withLoading(async () => {
+    await api.acceptMember(activeSpaceId.value, member.id);
+    const detail = await api.getSpace(activeSpaceId.value);
+    members.value = (detail.members || []).map(mapMember);
+    showToast('成员已确认加入');
+  });
+}
+
+async function removeMember(member) {
+  if (!window.confirm(`移除成员“${member.name}”？`)) return;
+  await withLoading(async () => {
+    await api.removeMember(activeSpaceId.value, member.id);
+    const detail = await api.getSpace(activeSpaceId.value);
+    members.value = (detail.members || []).map(mapMember);
+    showToast('成员已移除');
+  });
+}
+
+async function leaveSpace() {
+  if (!window.confirm('退出当前陪伴空间？退出后将无法访问这里的数据。')) return;
+  await withLoading(async () => {
+    await api.leaveSpace(activeSpaceId.value);
+    activeSpaceId.value = '';
+    activeSpace.value = null;
+    localStorage.removeItem('care-today-space-id');
+    await loadSpaces();
+    showToast('已退出空间');
+  });
+}
+
+async function deleteAccount() {
+  if (!window.confirm('删除账号会退出所有空间，确认继续？')) return;
+  await withLoading(async () => {
+    await api.deleteAccount();
+    logout();
+    showToast('账号已删除');
   });
 }
 
@@ -410,6 +592,7 @@ function mapTask(task) {
 
 function mapMessage(message) {
   return {
+    id: message.id,
     text: message.text,
     author: message.author,
     time: new Date(message.createdAt).toLocaleString('zh-CN'),
@@ -418,8 +601,10 @@ function mapMessage(message) {
 
 function mapNote(note) {
   return {
+    id: note.id,
     title: note.title,
     type: note.type,
+    content: note.content,
     desc: new Date(note.createdAt).toLocaleString('zh-CN'),
     visibility: note.visibility === 'PATIENT_ADMIN' ? '患者和管理员可见' : '空间成员可见',
   };
@@ -438,6 +623,7 @@ function mapMember(member) {
     REMOVED: '已移除',
   };
   return {
+    id: member.id,
     name: member.nickname,
     role: roleMap[member.role] || member.role,
     access: member.role === 'PATIENT_ADMIN' ? '完整管理权限' : '按空间授权访问',
@@ -569,7 +755,7 @@ function mapMember(member) {
             <div class="card-body today-grid">
               <div class="schedule">
                 <p v-if="!events.length" class="empty-note">还没有日程。到“日历”页添加复诊、检查或用药提醒。</p>
-                <div v-for="event in events.slice(0, 3)" :key="event.title" class="schedule-row">
+                <div v-for="event in events.slice(0, 3)" :key="event.id" class="schedule-row">
                   <strong class="time">{{ event.time }}</strong>
                   <div>
                     <strong>{{ event.title }}</strong>
@@ -639,7 +825,7 @@ function mapMember(member) {
             </header>
             <div class="card-body mini-list">
               <p v-if="!helpTasks.filter((item) => item.status === '待认领').length" class="empty-note">暂无待认领任务。</p>
-              <div v-for="task in helpTasks.filter((item) => item.status === '待认领').slice(0, 3)" :key="task.title" class="mini-row">
+              <div v-for="task in helpTasks.filter((item) => item.status === '待认领').slice(0, 3)" :key="task.id" class="mini-row">
                 <div>
                   <strong>{{ task.title }}</strong>
                   <span>{{ task.time }}</span>
@@ -658,7 +844,7 @@ function mapMember(member) {
             </header>
             <div class="card-body message-list">
               <p v-if="!messages.length" class="empty-note">还没有留言。</p>
-              <div v-for="message in messages.slice(0, 2)" :key="message.text" class="message">
+              <div v-for="message in messages.slice(0, 2)" :key="message.id" class="message">
                 <p>{{ message.text }}</p>
                 <span>{{ message.author }} · {{ message.time }}</span>
               </div>
@@ -678,13 +864,17 @@ function mapMember(member) {
           </header>
           <div class="card-body schedule full">
             <p v-if="!events.length" class="empty-note">还没有日程。下方添加后会写入后端数据库。</p>
-            <div v-for="event in events" :key="event.title" class="schedule-row">
+            <div v-for="event in events" :key="event.id" class="schedule-row">
               <strong class="time">{{ event.date }}<br />{{ event.time }}</strong>
               <div>
                 <strong>{{ event.title }}</strong>
                 <span>{{ event.place }} · {{ event.note }}</span>
               </div>
-              <span class="tag">{{ event.tag }}</span>
+              <div class="row-actions">
+                <span class="tag">{{ event.tag }}</span>
+                <button class="small-btn" type="button" @click="editEvent(event)">编辑</button>
+                <button class="small-btn danger" type="button" @click="deleteEvent(event)">删除</button>
+              </div>
             </div>
             <div class="event-form">
               <input v-model="eventDraft.title" type="text" placeholder="日程标题，例如：门诊复查" />
@@ -724,6 +914,8 @@ function mapMember(member) {
             <div class="form-row">
               <input v-model="statusDraft" type="text" placeholder="补充今天的身体感受" />
               <button class="small-btn sage" type="button" @click="saveStatus">保存记录</button>
+              <button class="small-btn" type="button" @click="editLatestBodyRecord">编辑最近</button>
+              <button class="small-btn danger" type="button" @click="deleteLatestBodyRecord">删除最近</button>
             </div>
             <p v-if="statusNote" class="saved-note">最近记录：{{ statusNote }}</p>
           </div>
@@ -743,7 +935,7 @@ function mapMember(member) {
             <span class="tag">复诊前勾选</span>
           </header>
           <div class="card-body checklist">
-            <label v-for="question in questions" :key="question.text" class="check-row">
+            <label v-for="question in questions" :key="question.id" class="check-row">
               <input v-model="question.done" type="checkbox" />
               <span>
                 <strong>{{ question.text }}</strong>
@@ -752,6 +944,8 @@ function mapMember(member) {
               <button class="mark-btn" :class="{ active: question.important }" type="button" @click.prevent="toggleImportant(question)">
                 重要
               </button>
+              <button class="mark-btn" type="button" @click.prevent="editQuestion(question)">编辑</button>
+              <button class="mark-btn danger" type="button" @click.prevent="deleteQuestion(question)">删除</button>
             </label>
             <div class="form-row">
               <input v-model="questionDraft" type="text" placeholder="添加一个复诊时想问医生的问题" />
@@ -772,7 +966,7 @@ function mapMember(member) {
           </header>
           <div class="card-body">
             <div class="help-grid">
-              <div v-for="task in helpTasks" :key="task.title" class="help-card">
+              <div v-for="task in helpTasks" :key="task.id" class="help-card">
                 <header>
                   <div>
                     <strong>{{ task.title }}</strong>
@@ -783,7 +977,11 @@ function mapMember(member) {
                 <p>{{ task.desc }}</p>
                 <footer>
                   <span>{{ task.claimedBy ? `认领人：${task.claimedBy}` : '还没人认领' }}</span>
-                  <button v-if="task.status === '待认领'" class="claim-btn" type="button" @click="claimTask(task)">认领</button>
+                  <div class="row-actions">
+                    <button v-if="task.status === '待认领'" class="claim-btn" type="button" @click="claimTask(task)">认领</button>
+                    <button class="small-btn" type="button" @click="editTask(task)">编辑</button>
+                    <button class="small-btn danger" type="button" @click="deleteTask(task)">删除</button>
+                  </div>
                 </footer>
               </div>
             </div>
@@ -805,9 +1003,13 @@ function mapMember(member) {
           </header>
           <div class="card-body">
             <div class="message-list">
-              <div v-for="message in messages" :key="message.text" class="message">
+              <div v-for="message in messages" :key="message.id" class="message">
                 <p>{{ message.text }}</p>
                 <span>{{ message.author }} · {{ message.time }}</span>
+                <div class="row-actions">
+                  <button class="small-btn" type="button" @click="editMessage(message)">编辑</button>
+                  <button class="small-btn danger" type="button" @click="deleteMessage(message)">删除</button>
+                </div>
               </div>
             </div>
             <div class="form-row">
@@ -828,13 +1030,16 @@ function mapMember(member) {
             <span class="tag">第一版仅文本记录</span>
           </header>
           <div class="card-body file-list">
-            <div v-for="note in notes" :key="note.title" class="file-row">
+            <div v-for="note in notes" :key="note.id" class="file-row">
               <span class="file-icon"><img :src="iconFolder" alt="" aria-hidden="true" /></span>
               <div>
                 <strong>{{ note.title }}</strong>
                 <span>{{ note.type }} · {{ note.desc }} · {{ note.visibility }}</span>
               </div>
-              <button class="small-btn sage" type="button">查看</button>
+              <div class="row-actions">
+                <button class="small-btn sage" type="button" @click="editNote(note)">编辑</button>
+                <button class="small-btn danger" type="button" @click="deleteNote(note)">删除</button>
+              </div>
             </div>
             <div class="form-row">
               <input v-model="noteDraft" type="text" placeholder="新增报告名称、用药记录或医嘱备注" />
@@ -855,17 +1060,23 @@ function mapMember(member) {
           </header>
           <div class="card-body">
             <div class="member-list">
-              <div v-for="member in members" :key="member.name" class="member-row">
+              <div v-for="member in members" :key="member.id" class="member-row">
                 <div>
                   <strong>{{ member.name }}</strong>
                   <span>{{ member.role }} · {{ member.access }}</span>
                 </div>
-                <span class="tag">{{ member.status }}</span>
+                <div class="row-actions">
+                  <span class="tag">{{ member.status }}</span>
+                  <button v-if="member.status === '待确认'" class="small-btn sage" type="button" @click="acceptMember(member)">确认</button>
+                  <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
+                </div>
               </div>
             </div>
             <div class="form-row">
               <input v-model="invitePhone" type="text" placeholder="输入手机号、昵称或邀请备注" />
               <button class="small-btn" type="button" @click="inviteMember">邀请成员</button>
+              <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
+              <button class="small-btn danger" type="button" @click="deleteAccount">删除账号</button>
             </div>
           </div>
         </article>

@@ -71,6 +71,10 @@ public class AuthRepository {
     jdbcTemplate.update("UPDATE users SET last_login_at = CURRENT_TIMESTAMP(3) WHERE id = ?", userId.toString());
   }
 
+  public void softDelete(UUID userId) {
+    jdbcTemplate.update("UPDATE users SET deleted_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND deleted_at IS NULL", userId.toString());
+  }
+
   private UserRecord mapUser(ResultSet rs) throws SQLException {
     return new UserRecord(
         UUID.fromString(rs.getString("id")),

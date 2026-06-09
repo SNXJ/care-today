@@ -16,6 +16,12 @@ import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
+import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
+import com.caretoday.api.care.CareRequests.UpdateEventRequest;
+import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
+import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
+import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
+import com.caretoday.api.common.RequestAuditContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -118,6 +124,60 @@ public class CareRepository {
         .findFirst();
   }
 
+  public Optional<SpaceMember> findMemberInSpace(UUID spaceId, UUID memberId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, nickname, role, status, joined_at
+            FROM space_members
+            WHERE id = ? AND space_id = ?
+            """,
+            (rs, rowNum) -> mapMember(rs),
+            id(memberId),
+            id(spaceId))
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<SpaceMember> findMembership(UUID spaceId, UUID userId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, nickname, role, status, joined_at
+            FROM space_members
+            WHERE space_id = ? AND user_id = ? AND status <> 'removed'
+            LIMIT 1
+            """,
+            (rs, rowNum) -> mapMember(rs),
+            id(spaceId),
+            id(userId))
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<SpaceMember> acceptMember(UUID spaceId, UUID memberId, UUID userId, String nickname) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE space_members
+        SET user_id = ?, nickname = COALESCE(?, nickname), status = 'active', joined_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND status = 'pending'
+        """,
+        id(userId),
+        nickname,
+        id(memberId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findMember(memberId);
+  }
+
+  public boolean removeMember(UUID spaceId, UUID memberId) {
+    return jdbcTemplate.update(
+        """
+        UPDATE space_members
+        SET status = 'removed', removed_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND status <> 'removed'
+        """,
+        id(memberId),
+        id(spaceId)) > 0;
+  }
+
   public boolean isActiveMember(UUID spaceId, UUID userId) {
     Boolean exists = jdbcTemplate.queryForObject(
         """
@@ -194,7 +254,7 @@ public class CareRepository {
         """
         SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
         FROM body_records
-        WHERE space_id = ?
+        WHERE space_id = ? AND deleted_at IS NULL
         ORDER BY record_date DESC, created_at DESC
         """,
         (rs, rowNum) -> mapBodyRecord(rs),
@@ -206,7 +266,7 @@ public class CareRepository {
             """
             SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
             FROM body_records
-            WHERE id = ?
+            WHERE id = ? AND deleted_at IS NULL
             """,
             (rs, rowNum) -> mapBodyRecord(rs),
             id(recordId))
@@ -235,6 +295,63 @@ public class CareRepository {
         request.note(),
         request.recordDate());
     return findBodyRecord(id).orElseThrow();
+  }
+
+  public Optional<CareEvent> updateEvent(UUID spaceId, UUID eventId, UpdateEventRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE events
+        SET title = COALESCE(?, title),
+            scheduled_at = COALESCE(?, scheduled_at),
+            location = COALESCE(?, location),
+            note = COALESCE(?, note),
+            needs_companion = COALESCE(?, needs_companion),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.title()),
+        request.scheduledAt() == null ? null : Timestamp.from(request.scheduledAt()),
+        request.location(),
+        request.note(),
+        request.needsCompanion(),
+        id(eventId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findEvent(eventId);
+  }
+
+  public boolean deleteEvent(UUID spaceId, UUID eventId) {
+    return softDelete("events", spaceId, eventId);
+  }
+
+  public Optional<BodyRecord> updateBodyRecord(UUID spaceId, UUID recordId, UpdateBodyRecordRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE body_records
+        SET pain_score = COALESCE(?, pain_score),
+            fatigue_score = COALESCE(?, fatigue_score),
+            sleep_score = COALESCE(?, sleep_score),
+            mood_score = COALESCE(?, mood_score),
+            appetite_score = COALESCE(?, appetite_score),
+            temperature = COALESCE(?, temperature),
+            note = COALESCE(?, note),
+            record_date = COALESCE(?, record_date)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        request.painScore(),
+        request.fatigueScore(),
+        request.sleepScore(),
+        request.moodScore(),
+        request.appetiteScore(),
+        request.temperature(),
+        request.note(),
+        request.recordDate(),
+        id(recordId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findBodyRecord(recordId);
+  }
+
+  public boolean deleteBodyRecord(UUID spaceId, UUID recordId) {
+    return softDelete("body_records", spaceId, recordId);
   }
 
   public List<DoctorQuestion> listDoctorQuestions(UUID spaceId) {
@@ -281,18 +398,44 @@ public class CareRepository {
     int updated = jdbcTemplate.update(
             """
             UPDATE doctor_questions
-            SET asked = COALESCE(?, asked),
+            SET question = COALESCE(?, question),
+                asked = COALESCE(?, asked),
                 doctor_answer = COALESCE(?, doctor_answer),
                 important = COALESCE(?, important),
                 updated_at = CURRENT_TIMESTAMP(3)
             WHERE id = ? AND space_id = ? AND deleted_at IS NULL
             """,
+            null,
             asked,
             doctorAnswer,
             important,
             id(questionId),
             id(spaceId));
     return updated == 0 ? Optional.empty() : findDoctorQuestion(questionId);
+  }
+
+  public Optional<DoctorQuestion> updateDoctorQuestion(UUID spaceId, UUID questionId, String question, Boolean asked, String doctorAnswer, Boolean important) {
+    int updated = jdbcTemplate.update(
+            """
+            UPDATE doctor_questions
+            SET question = COALESCE(?, question),
+                asked = COALESCE(?, asked),
+                doctor_answer = COALESCE(?, doctor_answer),
+                important = COALESCE(?, important),
+                updated_at = CURRENT_TIMESTAMP(3)
+            WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+            """,
+            blankToNull(question),
+            asked,
+            doctorAnswer,
+            important,
+            id(questionId),
+            id(spaceId));
+    return updated == 0 ? Optional.empty() : findDoctorQuestion(questionId);
+  }
+
+  public boolean deleteDoctorQuestion(UUID spaceId, UUID questionId) {
+    return softDelete("doctor_questions", spaceId, questionId);
   }
 
   public List<HelpTask> listHelpTasks(UUID spaceId) {
@@ -352,6 +495,32 @@ public class CareRepository {
     return updated == 0 ? Optional.empty() : findHelpTask(taskId);
   }
 
+  public Optional<HelpTask> updateHelpTask(UUID spaceId, UUID taskId, UpdateHelpTaskRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE help_tasks
+        SET title = COALESCE(?, title),
+            type = COALESCE(?, type),
+            scheduled_at = COALESCE(?, scheduled_at),
+            description = COALESCE(?, description),
+            status = COALESCE(?, status),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.title()),
+        blankToNull(request.type()),
+        request.scheduledAt() == null ? null : Timestamp.from(request.scheduledAt()),
+        request.description(),
+        request.status() == null ? null : request.status().toLowerCase(),
+        id(taskId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findHelpTask(taskId);
+  }
+
+  public boolean deleteHelpTask(UUID spaceId, UUID taskId) {
+    return softDelete("help_tasks", spaceId, taskId);
+  }
+
   public List<SupportMessage> listMessages(UUID spaceId) {
     return jdbcTemplate.query(
         """
@@ -391,6 +560,23 @@ public class CareRepository {
         id(userId),
         text);
     return findMessage(id).orElseThrow();
+  }
+
+  public Optional<SupportMessage> updateMessage(UUID spaceId, UUID messageId, UpdateMessageRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE messages
+        SET text = COALESCE(?, text)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.text()),
+        id(messageId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findMessage(messageId);
+  }
+
+  public boolean deleteMessage(UUID spaceId, UUID messageId) {
+    return softDelete("messages", spaceId, messageId);
   }
 
   public List<CareNote> listNotes(UUID spaceId) {
@@ -435,17 +621,57 @@ public class CareRepository {
     return findNote(id).orElseThrow();
   }
 
+  public Optional<CareNote> updateNote(UUID spaceId, UUID noteId, UpdateNoteRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE notes
+        SET title = COALESCE(?, title),
+            type = COALESCE(?, type),
+            content = COALESCE(?, content),
+            visibility = COALESCE(?, visibility),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.title()),
+        blankToNull(request.type()),
+        request.content(),
+        request.visibility() == null ? null : request.visibility().name().toLowerCase(),
+        id(noteId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findNote(noteId);
+  }
+
+  public boolean deleteNote(UUID spaceId, UUID noteId) {
+    return softDelete("notes", spaceId, noteId);
+  }
+
   public void audit(UUID spaceId, UUID userId, String action, String targetType, UUID targetId) {
+    audit(spaceId, userId, action, targetType, targetId, RequestAuditContext.ipAddress(), RequestAuditContext.userAgent());
+  }
+
+  public void audit(UUID spaceId, UUID userId, String action, String targetType, UUID targetId, String ipAddress, String userAgent) {
     jdbcTemplate.update(
         """
-        INSERT INTO audit_logs (space_id, user_id, action, target_type, target_id)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO audit_logs (space_id, user_id, action, target_type, target_id, ip_address, user_agent)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
         id(spaceId),
         id(userId),
         action,
         targetType,
-        id(targetId));
+        id(targetId),
+        ipAddress,
+        userAgent);
+  }
+
+  public void removeUserFromActiveSpaces(UUID userId) {
+    jdbcTemplate.update(
+        """
+        UPDATE space_members
+        SET status = 'removed', removed_at = CURRENT_TIMESTAMP(3)
+        WHERE user_id = ? AND status <> 'removed'
+        """,
+        id(userId));
   }
 
   private CareSpace mapSpace(ResultSet rs) throws SQLException {
@@ -548,5 +774,16 @@ public class CareRepository {
 
   private String id(UUID value) {
     return value == null ? null : value.toString();
+  }
+
+  private boolean softDelete(String tableName, UUID spaceId, UUID targetId) {
+    return jdbcTemplate.update(
+        "UPDATE " + tableName + " SET deleted_at = CURRENT_TIMESTAMP(3) WHERE id = ? AND space_id = ? AND deleted_at IS NULL",
+        id(targetId),
+        id(spaceId)) > 0;
+  }
+
+  private String blankToNull(String value) {
+    return value == null || value.isBlank() ? null : value.trim();
   }
 }

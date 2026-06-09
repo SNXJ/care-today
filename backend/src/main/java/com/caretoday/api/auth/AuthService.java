@@ -45,6 +45,10 @@ public class AuthService {
     return response(user);
   }
 
+  public void deleteAccount(java.util.UUID currentUserId) {
+    authRepository.softDelete(currentUserId);
+  }
+
   private Map<String, Object> response(AuthRepository.UserRecord user) {
     Map<String, Object> userPayload = new LinkedHashMap<>();
     userPayload.put("id", user.id());

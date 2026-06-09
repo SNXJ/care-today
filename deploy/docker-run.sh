@@ -60,6 +60,14 @@ docker run -d \
   eclipse-temurin:17-jre \
   java -jar /app/app.jar >/dev/null
 
+echo "Waiting for backend..."
+for _ in $(seq 1 60); do
+  if docker run --rm --network "$NETWORK" curlimages/curl:8.10.1 -fsS "http://$BACKEND_CONTAINER:3000/api/health" >/dev/null 2>&1; then
+    break
+  fi
+  sleep 2
+done
+
 docker run -d \
   --name "$NGINX_CONTAINER" \
   --network "$NETWORK" \
