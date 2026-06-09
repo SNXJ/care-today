@@ -68,6 +68,9 @@ public class CareService {
   public SpaceMember acceptMember(UUID currentUserId, UUID spaceId, UUID memberId) {
     careRepository.findSpace(spaceId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Care space not found"));
+    if (careRepository.isActiveMember(spaceId, currentUserId)) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "already joined this care space");
+    }
     SpaceMember member = careRepository.acceptMember(spaceId, memberId, currentUserId, null)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pending member not found"));
     careRepository.audit(spaceId, currentUserId, "member.accept", "space_member", member.id());
@@ -85,6 +88,9 @@ public class CareService {
     }
     if (target.role() == CareModels.MemberRole.PATIENT_ADMIN && !self) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, "cannot remove another admin");
+    }
+    if (target.role() == CareModels.MemberRole.PATIENT_ADMIN && careRepository.countActiveAdmins(spaceId) <= 1) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "cannot remove the last admin");
     }
     if (!careRepository.removeMember(spaceId, memberId)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Member not found");

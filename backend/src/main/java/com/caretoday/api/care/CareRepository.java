@@ -206,6 +206,17 @@ public class CareRepository {
     return Boolean.TRUE.equals(exists);
   }
 
+  public int countActiveAdmins(UUID spaceId) {
+    Integer count = jdbcTemplate.queryForObject(
+        """
+        SELECT COUNT(*) FROM space_members
+        WHERE space_id = ? AND status = 'active' AND role = 'patient_admin'
+        """,
+        Integer.class,
+        id(spaceId));
+    return count == null ? 0 : count;
+  }
+
   public List<CareEvent> listEvents(UUID spaceId) {
     return jdbcTemplate.query(
         """
@@ -511,7 +522,7 @@ public class CareRepository {
         blankToNull(request.type()),
         request.scheduledAt() == null ? null : Timestamp.from(request.scheduledAt()),
         request.description(),
-        request.status() == null ? null : request.status().toLowerCase(),
+        request.status() == null ? null : request.status().name().toLowerCase(),
         id(taskId),
         id(spaceId));
     return updated == 0 ? Optional.empty() : findHelpTask(taskId);

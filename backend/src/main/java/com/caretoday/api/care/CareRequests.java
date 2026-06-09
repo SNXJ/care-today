@@ -1,6 +1,7 @@
 package com.caretoday.api.care;
 
 import com.caretoday.api.care.CareModels.MemberRole;
+import com.caretoday.api.care.CareModels.HelpTaskStatus;
 import com.caretoday.api.care.CareModels.NoteVisibility;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
@@ -78,7 +79,7 @@ public final class CareRequests {
       String type,
       Instant scheduledAt,
       String description,
-      String status) {}
+      HelpTaskStatus status) {}
 
   public record CreateMessageRequest(@NotBlank String text) {}
 

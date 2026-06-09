@@ -236,6 +236,16 @@ async function loadBodyRecords() {
       { label: '体温', value: latest.temperature },
     ];
     statusNote.value = latest.note || '';
+  } else {
+    bodyRecords.value = [
+      { label: '疼痛', value: 3 },
+      { label: '乏力', value: 6 },
+      { label: '睡眠', value: 5 },
+      { label: '心情', value: 4 },
+      { label: '食欲', value: 5 },
+      { label: '体温', value: 37 },
+    ];
+    statusNote.value = '';
   }
 }
 
@@ -549,7 +559,11 @@ async function acceptPendingInvite() {
 
 async function copyInviteLink(member) {
   const url = `${window.location.origin}${window.location.pathname}?invite=${activeSpaceId.value}:${member.id}`;
-  await navigator.clipboard.writeText(url);
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(url);
+  } else {
+    window.prompt('复制邀请链接', url);
+  }
   showToast('邀请链接已复制');
 }
 
