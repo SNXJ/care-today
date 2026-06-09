@@ -1,6 +1,6 @@
 # CareToday Backend
 
-NestJS API scaffold for CareToday.
+Spring Boot API scaffold for CareToday.
 
 ## Current Scope
 
@@ -24,14 +24,21 @@ Implemented endpoint groups:
 
 ```bash
 cd backend
-npm install
-npm run dev
+mvn spring-boot:run
 ```
 
 API base URL:
 
 ```text
 http://localhost:3000/api
+```
+
+## Build
+
+```bash
+cd backend
+mvn clean package
+java -jar target/care-today-backend-0.1.0.jar
 ```
 
 ## Database
@@ -44,11 +51,11 @@ backend/database/schema.sql
 
 The first real persistence pass should add:
 
-- connection pooling
-- migrations
+- Spring Data JDBC or JPA repositories
+- migrations with Flyway or Liquibase
 - password hashing
 - JWT authentication
-- space membership authorization guards
+- space membership authorization filters
 - audit log writes for sensitive operations
 
 ## Medical Boundary

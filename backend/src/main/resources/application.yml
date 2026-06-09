@@ -1,0 +1,15 @@
+server:
+  port: ${PORT:3000}
+
+spring:
+  application:
+    name: care-today-backend
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+care-today:
+  medical-boundary: "CareToday only supports life companionship, appointment organization, and family collaboration. It does not provide diagnosis, treatment advice, or medication judgment."

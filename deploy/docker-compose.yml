@@ -13,12 +13,11 @@ services:
       - "5432:5432"
 
   backend:
-    image: node:20-alpine
+    image: maven:3.9-eclipse-temurin-17
     container_name: care-today-backend
     working_dir: /app
-    command: sh -c "npm install && npm run build && npm run start"
+    command: sh -c "mvn clean package -DskipTests && java -jar target/care-today-backend-0.1.0.jar"
     environment:
-      NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://care_today:care_today_password@postgres:5432/care_today
       JWT_SECRET: replace-with-a-long-random-secret
