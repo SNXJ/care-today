@@ -137,11 +137,13 @@ async function withLoading(action) {
 
 async function submitAuth() {
   await withLoading(async () => {
+    const email = authForm.value.email.trim();
+    const phone = authForm.value.phone.trim();
     const payload = {
-      email: authForm.value.email.trim() || undefined,
-      phone: authForm.value.phone.trim() || undefined,
+      email: email || undefined,
+      phone: phone || undefined,
       password: authForm.value.password,
-      ...(authMode.value === 'register' ? { nickname: authForm.value.nickname.trim() } : {}),
+      ...(authMode.value === 'register' ? { nickname: authForm.value.nickname.trim() || defaultNickname(email, phone) } : {}),
     };
     const result = authMode.value === 'register' ? await api.register(payload) : await api.login(payload);
     token.value = result.token;
@@ -152,6 +154,13 @@ async function submitAuth() {
     showToast(authMode.value === 'register' ? '注册成功' : '登录成功');
     await loadSpaces();
   });
+}
+
+function defaultNickname(email, phone) {
+  if (email) {
+    return email.split('@')[0];
+  }
+  return phone || '新成员';
 }
 
 function logout() {

@@ -9,7 +9,7 @@ public final class AuthRequests {
   public record RegisterRequest(
       String phone,
       @Email String email,
-      @NotBlank String nickname,
+      String nickname,
       @NotBlank String password) {}
 
   public record LoginRequest(

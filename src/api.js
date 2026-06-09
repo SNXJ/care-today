@@ -17,7 +17,7 @@ export function createApi(getToken) {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || error.error || `请求失败：${response.status}`);
+      throw new Error(error.reason || error.message || error.error || `请求失败：${response.status}`);
     }
     if (response.status === 204) {
       return null;
