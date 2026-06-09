@@ -149,13 +149,16 @@ http://localhost:3000/api
 
 ```text
 http://localhost:8080
+https://localhost:8443
 ```
+
+`deploy/docker-run.sh` 会为本地验证生成自签名证书到 `deploy/certs/`。浏览器首次访问 HTTPS 可能需要手动信任本地证书；正式生产环境应替换为有效域名证书。
 
 ## 数据从哪里添加
 
 当前数据有两个入口：
 
-- Web 页面添加：登录后先创建陪伴空间，再在页面里添加、编辑或删除日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。前端会调用 `/api`，数据写入 MySQL。
+- Web 页面添加：登录后先创建陪伴空间，再在页面里添加、编辑或删除日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。成员邀请会生成本地邀请链接，受邀人登录后自动加入。前端会调用 `/api`，数据写入 MySQL。
 - API 添加：可以直接调用 Spring Boot 后端接口，例如 `POST /api/auth/register`、`POST /api/spaces`、`POST/PATCH/DELETE /api/spaces/{spaceId}/events`。除注册和登录外，请求需要带 `Authorization: Bearer <token>`。
 
 本地开发时，前端默认请求同源 `/api`。如果后端单独运行在 `http://localhost:3000`，可以配置：

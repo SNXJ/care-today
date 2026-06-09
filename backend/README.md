@@ -58,6 +58,21 @@ API base URL:
 http://localhost:3000/api
 ```
 
+Full local Docker deployment:
+
+```bash
+./deploy/docker-run.sh
+```
+
+Web URLs:
+
+```text
+http://localhost:8080
+https://localhost:8443
+```
+
+The HTTPS endpoint uses a local self-signed certificate generated under `deploy/certs/`.
+
 ## Build
 
 ```bash
@@ -89,7 +104,7 @@ Persisted tables:
 - `notes`
 - `audit_logs`
 
-Every `/api/spaces/:spaceId/**` endpoint requires the caller to be an active member of that space. Member invitation and removing another member require `PATIENT_ADMIN`. Delete endpoints soft-delete data and return `204 No Content`.
+Every `/api/spaces/:spaceId/**` endpoint requires the caller to be an active member of that space. Member invitation and removing another member require `PATIENT_ADMIN`; invited users accept a pending member slot through `PATCH /api/spaces/:spaceId/members/:memberId/accept` after login. Delete endpoints soft-delete data and return `204 No Content`.
 
 ## Auth
 
