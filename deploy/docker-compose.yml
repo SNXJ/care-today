@@ -9,9 +9,6 @@ services:
       MYSQL_ROOT_PASSWORD: care_today_root_password
     volumes:
       - care_today_mysql:/var/lib/mysql
-      - ../backend/database/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
-    ports:
-      - "3306:3306"
 
   backend:
     image: maven:3.9-eclipse-temurin-17
