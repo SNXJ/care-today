@@ -2,6 +2,7 @@ package com.caretoday.api.auth;
 
 import com.caretoday.api.auth.AuthRequests.LoginRequest;
 import com.caretoday.api.auth.AuthRequests.RegisterRequest;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -29,7 +30,7 @@ public class AuthService {
     AuthRepository.UserRecord user = authRepository.createUser(
         request.phone(),
         request.email(),
-        request.nickname(),
+        resolveNickname(request),
         passwordEncoder.encode(request.password()));
     return response(user);
   }
@@ -45,16 +46,29 @@ public class AuthService {
   }
 
   private Map<String, Object> response(AuthRepository.UserRecord user) {
-    return Map.of(
-        "token", jwtService.createToken(user),
-        "user", Map.of(
-            "id", user.id(),
-            "phone", user.phone(),
-            "email", user.email(),
-            "nickname", user.nickname()));
+    Map<String, Object> userPayload = new LinkedHashMap<>();
+    userPayload.put("id", user.id());
+    userPayload.put("phone", user.phone());
+    userPayload.put("email", user.email());
+    userPayload.put("nickname", user.nickname());
+
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("token", jwtService.createToken(user));
+    payload.put("user", userPayload);
+    return payload;
   }
 
   private boolean isBlank(String value) {
     return value == null || value.isBlank();
+  }
+
+  private String resolveNickname(RegisterRequest request) {
+    if (!isBlank(request.nickname())) {
+      return request.nickname().trim();
+    }
+    if (!isBlank(request.email())) {
+      return request.email().trim().split("@", 2)[0];
+    }
+    return request.phone().trim();
   }
 }
