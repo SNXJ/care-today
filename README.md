@@ -17,26 +17,21 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 当前状态
 
-当前仓库处于早期原型阶段，当前首页 `index.html` 是 CareToday 设计风格标准页面，覆盖：
+当前仓库处于早期原型阶段，已包含一个 Vue 3 + Vite Web 原型页面，以及独立的 CareToday 设计风格标准预览：
 
-- 设计方向
-- 设计原则
-- 色彩系统
-- 字体排版
-- 布局规范
-- 组件规范
-- 文案语气
-- 医疗边界
+- `index.html`：Vue 应用入口
+- `design-preview/index.html`：设计风格标准页面
+- `design-preview/preview.png`：设计风格标准截图
 
 后续计划迁移为 Vue 3 Web 应用，并接入后端 API 和服务端数据库。
 
 ## 页面截图
 
-![CareToday 设计风格标准预览](docs/preview.png)
+![CareToday 设计风格标准预览](design-preview/preview.png)
 
 ## 设计风格标准
 
-`index.html` 当前承载第一版设计风格标准，可直接作为视觉和前端实现参考。它把 `docs/design-style-guide.md` 中的规范转成可浏览页面，重点包括：
+设计规范相关预览统一放在 `design-preview/` 目录，可直接作为视觉和前端实现参考。`design-preview/index.html` 把 `docs/design-style-guide.md` 中的规范转成可浏览页面，重点包括：
 
 - 视觉方向：温柔纸面 + 轻量信息面板
 - 色彩 token：基础色、功能色和使用边界
@@ -93,10 +88,10 @@ CareToday 希望把这些事变得更清楚一点：
 设计风格标准页面可以直接打开：
 
 ```bash
-open index.html
+open design-preview/index.html
 ```
 
-如果要预览 Vue 原型源码，可安装依赖：
+预览 Vue 原型源码可安装依赖：
 
 ```bash
 npm install
@@ -137,11 +132,12 @@ CareToday 仅用于生活陪伴、就诊整理和家庭协作。
 
 ```text
 care-today/
-  index.html                设计风格标准页面
+  index.html                Vue 应用入口
   患者陪伴需求文档.md        产品需求文档
   README.md                 项目说明
   docs/design-style-guide.md 设计风格规范文档
-  docs/preview.png          设计风格标准页面截图
+  design-preview/index.html 设计风格标准页面
+  design-preview/preview.png 设计风格标准页面截图
 ```
 
 后续推荐结构：
