@@ -17,6 +17,9 @@ export function createApi(getToken) {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
+      if (path === '/auth/register' && response.status === 409) {
+        throw new Error(error.reason || '账号已存在，请直接登录');
+      }
       throw new Error(error.reason || error.message || error.error || `请求失败：${response.status}`);
     }
     if (response.status === 204) {
@@ -32,6 +35,9 @@ export function createApi(getToken) {
     createSpace: (body) => request('/spaces', { method: 'POST', body }),
     getSpace: (spaceId) => request(`/spaces/${spaceId}`),
     inviteMember: (spaceId, body) => request(`/spaces/${spaceId}/members`, { method: 'POST', body }),
+    createMemberInvite: (spaceId, body) => request(`/spaces/${spaceId}/member-invites`, { method: 'POST', body }),
+    getMemberInvite: (token) => request(`/member-invites/${token}`),
+    acceptMemberInvite: (token, body = {}) => request(`/member-invites/${token}/accept`, { method: 'PATCH', body }),
     acceptMember: (spaceId, memberId) => request(`/spaces/${spaceId}/members/${memberId}/accept`, { method: 'PATCH' }),
     removeMember: (spaceId, memberId) => request(`/spaces/${spaceId}/members/${memberId}`, { method: 'DELETE' }),
     leaveSpace: (spaceId) => request(`/spaces/${spaceId}/leave`, { method: 'DELETE' }),

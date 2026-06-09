@@ -22,10 +22,10 @@ public class AuthService {
 
   public Map<String, Object> register(RegisterRequest request) {
     if (isBlank(request.phone()) && isBlank(request.email())) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "phone or email is required");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "请填写手机号或邮箱");
     }
     authRepository.findByLogin(request.phone(), request.email()).ifPresent(user -> {
-      throw new ResponseStatusException(HttpStatus.CONFLICT, "user already exists");
+      throw new ResponseStatusException(HttpStatus.CONFLICT, "账号已存在，请直接登录");
     });
     AuthRepository.UserRecord user = authRepository.createUser(
         request.phone(),

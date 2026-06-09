@@ -10,6 +10,7 @@ import com.caretoday.api.care.CareModels.HelpTaskStatus;
 import com.caretoday.api.care.CareModels.MemberRole;
 import com.caretoday.api.care.CareModels.MemberStatus;
 import com.caretoday.api.care.CareModels.NoteVisibility;
+import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
@@ -165,6 +166,70 @@ public class CareRepository {
         id(memberId),
         id(spaceId));
     return updated == 0 ? Optional.empty() : findMember(memberId);
+  }
+
+  public SpaceInvite createInvite(UUID spaceId, UUID invitedBy, String nickname, MemberRole role) {
+    UUID token = UUID.randomUUID();
+    jdbcTemplate.update(
+        """
+        INSERT INTO space_invites (token, space_id, invited_by, nickname, role, expires_at)
+        VALUES (?, ?, ?, ?, ?, DATE_ADD(CURRENT_TIMESTAMP(3), INTERVAL 7 DAY))
+        """,
+        id(token),
+        id(spaceId),
+        id(invitedBy),
+        nickname,
+        role.name().toLowerCase());
+    return findInvite(token).orElseThrow();
+  }
+
+  public Optional<SpaceInvite> findInvite(UUID token) {
+    return jdbcTemplate.query(
+            """
+            SELECT i.token, i.space_id, s.name AS space_name, s.patient_nickname, i.nickname, i.role, i.expires_at, i.created_at
+            FROM space_invites i
+            JOIN care_spaces s ON s.id = i.space_id
+            WHERE i.token = ?
+              AND i.revoked_at IS NULL
+              AND i.accepted_at IS NULL
+              AND i.expires_at > CURRENT_TIMESTAMP(3)
+              AND s.deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapInvite(rs),
+            id(token))
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<SpaceMember> acceptInvite(UUID token, UUID userId, String nickname) {
+    Optional<SpaceInvite> invite = findInvite(token);
+    if (invite.isEmpty()) {
+      return Optional.empty();
+    }
+    SpaceInvite value = invite.get();
+    if (isActiveMember(value.spaceId(), userId)) {
+      markInviteAccepted(token, userId);
+      return findMembership(value.spaceId(), userId);
+    }
+    SpaceMember member = addMember(
+        value.spaceId(),
+        userId,
+        nickname == null || nickname.isBlank() ? value.nickname() : nickname.trim(),
+        value.role(),
+        MemberStatus.ACTIVE);
+    markInviteAccepted(token, userId);
+    return Optional.of(member);
+  }
+
+  private void markInviteAccepted(UUID token, UUID userId) {
+    jdbcTemplate.update(
+        """
+        UPDATE space_invites
+        SET accepted_by = ?, accepted_at = CURRENT_TIMESTAMP(3)
+        WHERE token = ? AND accepted_at IS NULL
+        """,
+        id(userId),
+        id(token));
   }
 
   public boolean removeMember(UUID spaceId, UUID memberId) {
@@ -702,6 +767,18 @@ public class CareRepository {
         MemberRole.valueOf(rs.getString("role").toUpperCase()),
         MemberStatus.valueOf(rs.getString("status").toUpperCase()),
         toInstant(rs, "joined_at"));
+  }
+
+  private SpaceInvite mapInvite(ResultSet rs) throws SQLException {
+    return new SpaceInvite(
+        uuid(rs, "token"),
+        uuid(rs, "space_id"),
+        rs.getString("space_name"),
+        rs.getString("patient_nickname"),
+        rs.getString("nickname"),
+        MemberRole.valueOf(rs.getString("role").toUpperCase()),
+        toInstant(rs, "expires_at"),
+        toInstant(rs, "created_at"));
   }
 
   private CareEvent mapEvent(ResultSet rs) throws SQLException {

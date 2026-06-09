@@ -24,6 +24,8 @@ public final class CareRequests {
       @NotBlank String nickname,
       @NotNull MemberRole role) {}
 
+  public record AcceptInviteRequest(String nickname) {}
+
   public record CreateEventRequest(
       @NotBlank String title,
       @NotNull Instant scheduledAt,

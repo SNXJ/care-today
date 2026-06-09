@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { createApi } from './api';
 
 import iconToday from './assets/icons/nav-today.svg';
+import iconTimeline from './assets/icons/nav-timeline.svg';
 import iconCalendar from './assets/icons/nav-calendar.svg';
 import iconDoctor from './assets/icons/nav-doctor.svg';
 import iconBody from './assets/icons/nav-body.svg';
@@ -21,6 +22,7 @@ const disclaimer =
 
 const navItems = [
   { id: 'today', label: '今天', icon: iconToday },
+  { id: 'timeline', label: '时间线', icon: iconTimeline },
   { id: 'calendar', label: '日历', icon: iconCalendar },
   { id: 'body', label: '身体', icon: iconBody },
   { id: 'doctor', label: '问医生', icon: iconDoctor },
@@ -31,14 +33,28 @@ const navItems = [
 ];
 
 const quickNeeds = [
-  { label: '陪我去医院', desc: '把时间、地点和资料先放好', icon: iconHospital },
-  { label: '帮我处理一件事', desc: '买药、做饭、接送都可以认领', icon: iconTask },
-  { label: '只是陪我聊聊', desc: '不讲道理，也不急着解决', icon: iconChat },
+  { label: '安排陪诊', desc: '去日历填写时间、地点和资料', icon: iconHospital, view: 'calendar' },
+  { label: '发布帮忙任务', desc: '买药、做饭、接送都可以认领', icon: iconTask, view: 'help' },
+  { label: '写一条留言', desc: '给家人朋友留一句想说的话', icon: iconChat, view: 'messages' },
 ];
 
 const view = ref('today');
 const toastText = ref('');
 const loading = ref(false);
+const dialog = ref({
+  open: false,
+  mode: 'confirm',
+  eyebrow: '',
+  title: '',
+  message: '',
+  icon: iconLock,
+  fields: [],
+  values: {},
+  confirmText: '确认',
+  cancelText: '取消',
+  danger: false,
+  resolver: null,
+});
 const token = ref(localStorage.getItem('care-today-token') || '');
 const currentUser = ref(JSON.parse(localStorage.getItem('care-today-user') || 'null'));
 const activeSpaceId = ref(localStorage.getItem('care-today-space-id') || '');
@@ -50,7 +66,7 @@ const authForm = ref({
   password: '',
 });
 const spaceForm = ref({
-  name: '陪你一起过今天',
+  name: '今天',
   patientNickname: '',
   description: '',
 });
@@ -95,6 +111,125 @@ const activeNav = computed(() => navItems.find((item) => item.id === view.value)
 const isAuthed = computed(() => Boolean(token.value && currentUser.value));
 const hasSpace = computed(() => Boolean(activeSpaceId.value));
 const nextVisitLabel = computed(() => events.value[0]?.date || '待添加');
+const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+const calendarBaseDate = computed(() => {
+  const firstEvent = events.value[0]?.scheduledAt ? new Date(events.value[0].scheduledAt) : new Date();
+  return Number.isNaN(firstEvent.getTime()) ? new Date() : firstEvent;
+});
+const calendarMonthLabel = computed(() =>
+  calendarBaseDate.value.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
+);
+const calendarDays = computed(() => {
+  const base = calendarBaseDate.value;
+  const year = base.getFullYear();
+  const month = base.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const offset = (firstDay.getDay() + 6) % 7;
+  const todayKey = toDateKey(new Date());
+
+  return Array.from({ length: offset + daysInMonth }, (_, index) => {
+    if (index < offset) {
+      return { key: `empty-${index}`, empty: true };
+    }
+    const day = index - offset + 1;
+    const date = new Date(year, month, day);
+    const key = toDateKey(date);
+    const dayEvents = events.value.filter((event) => event.dateKey === key);
+    return {
+      key,
+      day,
+      isToday: key === todayKey,
+      events: dayEvents,
+    };
+  });
+});
+const upcomingEvents = computed(() =>
+  events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
+);
+const calendarEventDays = computed(() => calendarDays.value.filter((day) => !day.empty));
+const nextCalendarEvent = computed(() => upcomingEvents.value[0] || null);
+const timelineItems = computed(() => {
+  const items = [
+    ...events.value.map((event) => ({
+      id: `event-${event.id}`,
+      type: '日程',
+      title: event.title,
+      meta: `${event.time} · ${event.place}`,
+      detail: event.note || (event.needsCompanion ? '需要有人陪同' : '站内提醒'),
+      at: event.scheduledAt,
+      dateLabel: event.date,
+      icon: iconCalendar,
+      view: 'calendar',
+      accent: 'rose',
+    })),
+    ...bodyRecordItems.value.map((record) => ({
+      id: `body-${record.id}`,
+      type: '身体',
+      title: '记录了一次身体状态',
+      meta: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 体温 ${record.temperature}℃`,
+      detail: record.note || '没有补充备注',
+      at: record.createdAt || record.recordDate,
+      dateLabel: formatTimelineDate(record.createdAt || record.recordDate),
+      icon: iconBody,
+      view: 'body',
+      accent: 'sage',
+    })),
+    ...questions.value.map((question) => ({
+      id: `question-${question.id}`,
+      type: '问医生',
+      title: question.text,
+      meta: question.done ? '已问过医生' : question.important ? '重点问题' : '待复诊时确认',
+      detail: question.answer || '还没有记录医生回复',
+      at: question.createdAt,
+      dateLabel: formatTimelineDate(question.createdAt),
+      icon: iconDoctor,
+      view: 'doctor',
+      accent: 'blue',
+    })),
+    ...helpTasks.value.map((task) => ({
+      id: `task-${task.id}`,
+      type: '帮忙',
+      title: task.title,
+      meta: `${task.status} · ${task.time}`,
+      detail: task.desc,
+      at: task.createdAt || task.scheduledAt,
+      dateLabel: formatTimelineDate(task.createdAt || task.scheduledAt),
+      icon: iconHelp,
+      view: 'help',
+      accent: 'amber',
+    })),
+    ...messages.value.map((message) => ({
+      id: `message-${message.id}`,
+      type: '留言',
+      title: message.text,
+      meta: message.author,
+      detail: '一条陪伴留言',
+      at: message.createdAt,
+      dateLabel: formatTimelineDate(message.createdAt),
+      icon: iconMessage,
+      view: 'messages',
+      accent: 'rose',
+    })),
+    ...notes.value.map((note) => ({
+      id: `note-${note.id}`,
+      type: '资料',
+      title: note.title,
+      meta: `${note.type} · ${note.visibility}`,
+      detail: note.content || '资料文本已保存',
+      at: note.createdAt,
+      dateLabel: formatTimelineDate(note.createdAt),
+      icon: iconFolder,
+      view: 'folder',
+      accent: 'sage',
+    })),
+  ];
+
+  return items
+    .filter((item) => item.at)
+    .sort((a, b) => new Date(b.at) - new Date(a.at))
+    .slice(0, 30);
+});
 const bodyRecordPayload = computed(() => ({
   painScore: Number(bodyRecords.value.find((item) => item.label === '疼痛')?.value || 0),
   fatigueScore: Number(bodyRecords.value.find((item) => item.label === '乏力')?.value || 0),
@@ -167,6 +302,109 @@ function defaultNickname(email, phone) {
     return email.split('@')[0];
   }
   return phone || '新成员';
+}
+
+async function confirmLogout() {
+  const confirmed = await openConfirmDialog({
+    eyebrow: '退出登录',
+    title: '确认退出当前账号？',
+    message: '退出后本机不会继续保留登录状态，重新进入陪伴空间需要再次登录。',
+    icon: iconLock,
+    confirmText: '确认退出',
+    danger: true,
+  });
+  if (confirmed) {
+    logout();
+  }
+}
+
+function cancelLogout() {
+  closeDialog(false);
+}
+
+function performLogout() {
+  closeDialog(true);
+}
+
+function openConfirmDialog(options) {
+  return new Promise((resolve) => {
+    dialog.value = {
+      open: true,
+      mode: 'confirm',
+      eyebrow: options.eyebrow || '确认操作',
+      title: options.title,
+      message: options.message || '',
+      icon: options.icon || iconLock,
+      fields: [],
+      values: {},
+      confirmText: options.confirmText || '确认',
+      cancelText: options.cancelText || '取消',
+      danger: Boolean(options.danger),
+      onSubmit: null,
+      resolver: resolve,
+    };
+  });
+}
+
+function openFormDialog(options) {
+  return new Promise((resolve) => {
+    const values = {};
+    for (const field of options.fields || []) {
+      values[field.name] = field.value ?? '';
+    }
+    dialog.value = {
+      open: true,
+      mode: 'form',
+      eyebrow: options.eyebrow || '编辑',
+      title: options.title,
+      message: options.message || '',
+      icon: options.icon || iconPrivacy,
+      fields: options.fields || [],
+      values,
+      confirmText: options.confirmText || '保存',
+      cancelText: options.cancelText || '取消',
+      danger: Boolean(options.danger),
+      onSubmit: options.onSubmit || null,
+      resolver: resolve,
+    };
+  });
+}
+
+async function submitDialog() {
+  if (dialog.value.onSubmit) {
+    await dialog.value.onSubmit({ ...dialog.value.values });
+    closeDialog({ ...dialog.value.values });
+    return;
+  }
+  if (dialog.value.mode === 'form') {
+    for (const field of dialog.value.fields) {
+      if (field.required && !String(dialog.value.values[field.name] || '').trim()) {
+        showToast(`请填写${field.label}`);
+        return;
+      }
+    }
+    closeDialog({ ...dialog.value.values });
+    return;
+  }
+  closeDialog(true);
+}
+
+function closeDialog(result) {
+  const resolver = dialog.value.resolver;
+  dialog.value.open = false;
+  dialog.value.resolver = null;
+  dialog.value.onSubmit = null;
+  if (resolver) {
+    resolver(result);
+  }
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  return false;
 }
 
 function logout() {
@@ -265,8 +503,8 @@ async function loadNotes() {
   notes.value = (await api.listNotes(activeSpaceId.value)).map(mapNote);
 }
 
-function saveNeed(label) {
-  showToast(`已记录：${label}`);
+function openQuickNeed(need) {
+  go(need.view);
 }
 
 async function saveStatus() {
@@ -279,7 +517,7 @@ async function saveStatus() {
     statusNote.value = result.record.note || '';
     statusDraft.value = '';
     await loadBodyRecords();
-    showToast('身体记录已保存到数据库');
+    showToast('今天的身体状态已记录');
   });
 }
 
@@ -289,10 +527,15 @@ async function editLatestBodyRecord() {
     showToast('还没有身体记录');
     return;
   }
-  const note = window.prompt('修改最近身体记录备注', latest.note || '');
-  if (note === null) return;
+  const values = await openFormDialog({
+    eyebrow: '身体记录',
+    title: '编辑最近身体记录',
+    icon: iconBody,
+    fields: [{ name: 'note', label: '备注', value: latest.note || '', type: 'textarea' }],
+  });
+  if (!values) return;
   await withLoading(async () => {
-    await api.updateBodyRecord(activeSpaceId.value, latest.id, { note });
+    await api.updateBodyRecord(activeSpaceId.value, latest.id, { note: values.note });
     await loadBodyRecords();
     showToast('身体记录已更新');
   });
@@ -300,7 +543,16 @@ async function editLatestBodyRecord() {
 
 async function deleteLatestBodyRecord() {
   const latest = bodyRecordItems.value[0];
-  if (!latest || !window.confirm('删除最近一条身体记录？')) return;
+  if (!latest) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除记录',
+    title: '删除最近一条身体记录？',
+    message: '删除后默认列表里不会再显示这条记录。',
+    icon: iconBody,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteBodyRecord(activeSpaceId.value, latest.id);
     statusNote.value = '';
@@ -342,15 +594,22 @@ async function addEvent() {
 }
 
 async function editEvent(event) {
-  const title = window.prompt('修改日程标题', event.title);
-  if (title === null || !title.trim()) return;
-  const location = window.prompt('修改地点', event.location || '') ?? event.location;
-  const note = window.prompt('修改备注', event.note || '') ?? event.note;
+  const values = await openFormDialog({
+    eyebrow: '日程安排',
+    title: '编辑日程',
+    icon: iconCalendar,
+    fields: [
+      { name: 'title', label: '日程标题', value: event.title, required: true },
+      { name: 'location', label: '地点', value: event.location || '' },
+      { name: 'note', label: '备注', value: event.note || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.updateEvent(activeSpaceId.value, event.id, {
-      title: title.trim(),
-      location: location?.trim() || '',
-      note: note?.trim() || '',
+      title: values.title.trim(),
+      location: values.location?.trim() || '',
+      note: values.note?.trim() || '',
     });
     await loadEvents();
     showToast('日程已更新');
@@ -358,7 +617,15 @@ async function editEvent(event) {
 }
 
 async function deleteEvent(event) {
-  if (!window.confirm(`删除日程“${event.title}”？`)) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除日程',
+    title: `删除日程“${event.title}”？`,
+    message: '删除后时间线和日历中不会再显示这条安排。',
+    icon: iconCalendar,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteEvent(activeSpaceId.value, event.id);
     await loadEvents();
@@ -374,13 +641,20 @@ async function toggleImportant(question) {
 }
 
 async function editQuestion(question) {
-  const text = window.prompt('修改问题', question.text);
-  if (text === null || !text.trim()) return;
-  const answer = window.prompt('医生答复，可留空', question.answer || '');
+  const values = await openFormDialog({
+    eyebrow: '问医生',
+    title: '编辑问题',
+    icon: iconDoctor,
+    fields: [
+      { name: 'text', label: '问题', value: question.text, required: true, type: 'textarea' },
+      { name: 'answer', label: '医生答复', value: question.answer || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.updateDoctorQuestion(activeSpaceId.value, question.id, {
-      question: text.trim(),
-      doctorAnswer: answer ?? question.answer ?? '',
+      question: values.text.trim(),
+      doctorAnswer: values.answer ?? question.answer ?? '',
     });
     await loadQuestions();
     showToast('问题已更新');
@@ -388,7 +662,15 @@ async function editQuestion(question) {
 }
 
 async function deleteQuestion(question) {
-  if (!window.confirm('删除这个问题？')) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除问题',
+    title: '删除这个问题？',
+    message: question.text,
+    icon: iconDoctor,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteDoctorQuestion(activeSpaceId.value, question.id);
     await loadQuestions();
@@ -405,13 +687,20 @@ async function claimTask(task) {
 }
 
 async function editTask(task) {
-  const title = window.prompt('修改任务标题', task.title);
-  if (title === null || !title.trim()) return;
-  const description = window.prompt('修改任务说明', task.desc || '');
+  const values = await openFormDialog({
+    eyebrow: '帮忙任务',
+    title: '编辑任务',
+    icon: iconHelp,
+    fields: [
+      { name: 'title', label: '任务标题', value: task.title, required: true },
+      { name: 'description', label: '任务说明', value: task.desc || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.updateHelpTask(activeSpaceId.value, task.id, {
-      title: title.trim(),
-      description: description ?? task.desc,
+      title: values.title.trim(),
+      description: values.description ?? task.desc,
     });
     await loadHelpTasks();
     showToast('任务已更新');
@@ -419,7 +708,15 @@ async function editTask(task) {
 }
 
 async function deleteTask(task) {
-  if (!window.confirm(`删除任务“${task.title}”？`)) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除任务',
+    title: `删除任务“${task.title}”？`,
+    message: '删除后成员将不能再认领这件事。',
+    icon: iconHelp,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteHelpTask(activeSpaceId.value, task.id);
     await loadHelpTasks();
@@ -458,17 +755,30 @@ async function addMessage() {
 }
 
 async function editMessage(message) {
-  const text = window.prompt('修改留言', message.text);
-  if (text === null || !text.trim()) return;
+  const values = await openFormDialog({
+    eyebrow: '留言',
+    title: '编辑留言',
+    icon: iconMessage,
+    fields: [{ name: 'text', label: '留言内容', value: message.text, required: true, type: 'textarea' }],
+  });
+  if (!values) return;
   await withLoading(async () => {
-    await api.updateMessage(activeSpaceId.value, message.id, { text: text.trim() });
+    await api.updateMessage(activeSpaceId.value, message.id, { text: values.text.trim() });
     await loadMessages();
     showToast('留言已更新');
   });
 }
 
 async function deleteMessage(message) {
-  if (!window.confirm('删除这条留言？')) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除留言',
+    title: '删除这条留言？',
+    message: message.text,
+    icon: iconMessage,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteMessage(activeSpaceId.value, message.id);
     await loadMessages();
@@ -495,13 +805,20 @@ async function addNote() {
 }
 
 async function editNote(note) {
-  const title = window.prompt('修改资料标题', note.title);
-  if (title === null || !title.trim()) return;
-  const content = window.prompt('修改资料内容', note.content || '');
+  const values = await openFormDialog({
+    eyebrow: '资料夹',
+    title: '编辑资料',
+    icon: iconFolder,
+    fields: [
+      { name: 'title', label: '资料标题', value: note.title, required: true },
+      { name: 'content', label: '资料内容', value: note.content || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.updateNote(activeSpaceId.value, note.id, {
-      title: title.trim(),
-      content: content ?? note.content ?? '',
+      title: values.title.trim(),
+      content: values.content ?? note.content ?? '',
     });
     await loadNotes();
     showToast('资料已更新');
@@ -509,7 +826,15 @@ async function editNote(note) {
 }
 
 async function deleteNote(note) {
-  if (!window.confirm(`删除资料“${note.title}”？`)) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除资料',
+    title: `删除资料“${note.title}”？`,
+    message: '删除后资料夹里不会再显示这条记录。',
+    icon: iconFolder,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteNote(activeSpaceId.value, note.id);
     await loadNotes();
@@ -523,11 +848,9 @@ async function inviteMember() {
     return;
   }
   await withLoading(async () => {
-    await api.inviteMember(activeSpaceId.value, { nickname: invitePhone.value.trim(), role: 'FRIEND' });
+    const invite = await api.createMemberInvite(activeSpaceId.value, { nickname: invitePhone.value.trim(), role: 'FRIEND' });
     invitePhone.value = '';
-    const detail = await api.getSpace(activeSpaceId.value);
-    members.value = (detail.members || []).map(mapMember);
-    showToast('邀请已创建，等待确认');
+    await showInviteLink(invite);
   });
 }
 
@@ -543,13 +866,23 @@ async function acceptMember(member) {
 async function acceptPendingInvite() {
   const invite = localStorage.getItem('care-today-invite');
   if (!invite || !isAuthed.value) return;
-  const [spaceId, memberId] = invite.split(':');
-  if (!spaceId || !memberId) {
+  if (invite.includes(':')) {
+    const [spaceId, memberId] = invite.split(':');
+    if (spaceId && memberId) {
+      await withLoading(async () => {
+        await api.acceptMember(spaceId, memberId);
+        localStorage.removeItem('care-today-invite');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        await loadSpaces();
+        showToast('已加入陪伴空间');
+      });
+      return;
+    }
     localStorage.removeItem('care-today-invite');
     return;
   }
   await withLoading(async () => {
-    await api.acceptMember(spaceId, memberId);
+    await api.acceptMemberInvite(invite, { nickname: currentUser.value?.nickname });
     localStorage.removeItem('care-today-invite');
     window.history.replaceState({}, document.title, window.location.pathname);
     await loadSpaces();
@@ -558,17 +891,36 @@ async function acceptPendingInvite() {
 }
 
 async function copyInviteLink(member) {
-  const url = `${window.location.origin}${window.location.pathname}?invite=${activeSpaceId.value}:${member.id}`;
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(url);
-  } else {
-    window.prompt('复制邀请链接', url);
-  }
-  showToast('邀请链接已复制');
+  await showInviteLink(member);
+}
+
+async function showInviteLink(invite) {
+  const url = `${window.location.origin}${window.location.pathname}?invite=${invite.token || invite.id}`;
+  const nickname = invite.nickname || invite.name || '家人朋友';
+  await openFormDialog({
+    eyebrow: '邀请链接',
+    title: `邀请“${nickname}”加入`,
+    message: '点击“复制链接”后发给家人朋友。对方打开后登录或注册，就会加入这个陪伴空间。',
+    icon: iconLock,
+    fields: [{ name: 'url', label: '邀请链接', value: url, type: 'textarea', readonly: true }],
+    confirmText: '复制链接',
+    onSubmit: async (values) => {
+      const copied = await copyText(values.url);
+      showToast(copied ? '邀请链接已复制' : '当前浏览器不支持自动复制，请手动复制链接');
+    },
+  });
 }
 
 async function removeMember(member) {
-  if (!window.confirm(`移除成员“${member.name}”？`)) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '移除成员',
+    title: `移除成员“${member.name}”？`,
+    message: '移除后该成员将不能继续访问这个陪伴空间。',
+    icon: iconLock,
+    confirmText: '移除',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.removeMember(activeSpaceId.value, member.id);
     const detail = await api.getSpace(activeSpaceId.value);
@@ -578,7 +930,15 @@ async function removeMember(member) {
 }
 
 async function leaveSpace() {
-  if (!window.confirm('退出当前陪伴空间？退出后将无法访问这里的数据。')) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '退出空间',
+    title: '退出当前陪伴空间？',
+    message: '退出后你将无法访问这里的数据，除非管理员重新邀请你。',
+    icon: iconLock,
+    confirmText: '退出空间',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.leaveSpace(activeSpaceId.value);
     activeSpaceId.value = '';
@@ -590,7 +950,15 @@ async function leaveSpace() {
 }
 
 async function deleteAccount() {
-  if (!window.confirm('删除账号会退出所有空间，确认继续？')) return;
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除账号',
+    title: '删除账号会退出所有空间',
+    message: '删除后当前账号将不能继续登录，必要审计信息会按规则保留。',
+    icon: iconWarning,
+    confirmText: '删除账号',
+    danger: true,
+  });
+  if (!confirmed) return;
   await withLoading(async () => {
     await api.deleteAccount();
     logout();
@@ -602,11 +970,23 @@ function mapEvent(event) {
   const date = new Date(event.scheduledAt);
   return {
     ...event,
+    dateKey: toDateKey(date),
     time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
     date: date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }),
+    day: date.getDate(),
     place: event.location || '待补充地点',
     tag: event.needsCompanion ? '需要陪同' : '站内提醒',
   };
+}
+
+function toDateKey(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = `${date.getMonth() + 1}`.padStart(2, '0');
+  const day = `${date.getDate()}`.padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function mapQuestion(question) {
@@ -616,6 +996,7 @@ function mapQuestion(question) {
     done: question.asked,
     important: question.important,
     answer: question.doctorAnswer,
+    createdAt: question.createdAt,
   };
 }
 
@@ -629,6 +1010,8 @@ function mapTask(task) {
     desc: task.description || '暂无说明',
     status: statusMap[task.status] || task.status,
     claimedBy: task.claimedBy || '',
+    scheduledAt: task.scheduledAt,
+    createdAt: task.createdAt,
   };
 }
 
@@ -638,6 +1021,7 @@ function mapMessage(message) {
     text: message.text,
     author: message.author,
     time: new Date(message.createdAt).toLocaleString('zh-CN'),
+    createdAt: message.createdAt,
   };
 }
 
@@ -649,7 +1033,15 @@ function mapNote(note) {
     content: note.content,
     desc: new Date(note.createdAt).toLocaleString('zh-CN'),
     visibility: note.visibility === 'PATIENT_ADMIN' ? '患者和管理员可见' : '空间成员可见',
+    createdAt: note.createdAt,
   };
+}
+
+function formatTimelineDate(value) {
+  if (!value) return '待记录';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '待记录';
+  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
 }
 
 function mapMember(member) {
@@ -683,7 +1075,7 @@ function mapMember(member) {
         </span>
         <span>
           <strong>CareToday</strong>
-          <small>陪你一起过今天</small>
+          <small>今天</small>
         </span>
       </button>
 
@@ -711,7 +1103,7 @@ function mapMember(member) {
       <section class="topbar">
         <div>
           <p class="eyebrow">{{ activeNav?.label || '今天' }}</p>
-          <h1>{{ activeSpace?.name || '陪你一起过今天' }}</h1>
+          <h1>{{ activeSpace?.name || '今天' }}</h1>
           <p class="lead">不用一个人记住所有事情。这里帮你整理复诊、身体感受、想问医生的问题，以及家人朋友可以接住的具体小事。</p>
         </div>
         <div class="top-actions">
@@ -719,7 +1111,8 @@ function mapMember(member) {
             <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
             仅自己和被授权成员可见
           </div>
-          <button v-if="isAuthed" class="small-btn sage" type="button" @click="logout">{{ currentUser.nickname }} · 退出</button>
+          <button v-if="isAuthed && hasSpace" class="small-btn" type="button" @click="go('members')">邀请家人</button>
+          <button v-if="isAuthed" class="small-btn sage" type="button" @click="confirmLogout">{{ currentUser.nickname }} · 退出</button>
         </div>
       </section>
 
@@ -779,11 +1172,20 @@ function mapMember(member) {
 
       <section v-else-if="view === 'today'" class="page-grid">
         <div class="main-stack">
-          <section class="quick-actions" aria-label="今天最需要什么">
-            <button v-for="need in quickNeeds" :key="need.label" class="need-button" type="button" @click="saveNeed(need.label)">
-              <span class="icon-wrap"><img :src="need.icon" alt="" aria-hidden="true" /></span>
-              <span><strong>{{ need.label }}</strong><small>{{ need.desc }}</small></span>
-            </button>
+          <section class="quick-panel" aria-label="快捷发起">
+            <div class="quick-panel-head">
+              <div>
+                <span class="calendar-kicker">快捷发起</span>
+                <strong>今天想让家人朋友知道什么？</strong>
+              </div>
+              <span class="tag">点击后进入对应页面</span>
+            </div>
+            <div class="quick-actions">
+              <button v-for="need in quickNeeds" :key="need.label" class="need-button" type="button" @click="openQuickNeed(need)">
+                <span class="icon-wrap"><img :src="need.icon" alt="" aria-hidden="true" /></span>
+                <span><strong>{{ need.label }}</strong><small>{{ need.desc }}</small></span>
+              </button>
+            </div>
           </section>
 
           <article class="card">
@@ -819,11 +1221,12 @@ function mapMember(member) {
             <header class="card-header">
               <div class="card-title">
                 <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
-                <h2>身体状态快捷记录</h2>
+                <h2>今天身体怎么样</h2>
               </div>
-              <span class="tag">保存到数据库</span>
+              <span class="tag">家人可在时间线看到</span>
             </header>
             <div class="card-body">
+              <p class="section-hint">记录疼痛、乏力、睡眠和心情，并补一句今天的感受。保存后会进入“身体”和“时间线”，方便复诊前回看。</p>
               <div class="status-grid">
                 <div v-for="record in bodyRecords.slice(0, 4)" :key="record.label" class="status-item">
                   <div class="status-label">
@@ -834,8 +1237,8 @@ function mapMember(member) {
                 </div>
               </div>
               <div class="form-row">
-                <input v-model="statusDraft" type="text" placeholder="补充今天的感受，例如：下午有点恶心，晚饭吃得少" />
-                <button class="small-btn sage" type="button" @click="saveStatus">保存记录</button>
+                <input v-model="statusDraft" type="text" placeholder="写一句今天的感受，例如：下午有点恶心，晚饭吃得少" />
+                <button class="small-btn sage" type="button" @click="saveStatus">记录今天状态</button>
               </div>
             </div>
           </article>
@@ -895,6 +1298,57 @@ function mapMember(member) {
         </aside>
       </section>
 
+      <section v-else-if="view === 'timeline'" class="single-stack timeline-page">
+        <article class="card timeline-card">
+          <header class="card-header">
+            <div class="card-title">
+              <img class="icon" :src="iconTimeline" alt="" aria-hidden="true" />
+              <h2>陪伴时间线</h2>
+            </div>
+            <span class="tag">{{ timelineItems.length ? `最近 ${timelineItems.length} 条` : '暂无动态' }}</span>
+          </header>
+          <div class="card-body">
+            <div class="timeline-summary">
+              <div>
+                <span class="calendar-kicker">最近发生的事</span>
+                <strong>{{ activeSpace?.patientNickname || currentUser.nickname }} 的照护动态</strong>
+                <p>把日程、身体记录、问题清单、帮忙任务、留言和资料更新放到同一个视图里，先看全局，再去具体模块处理。</p>
+              </div>
+              <div class="timeline-jump">
+                <button class="small-btn sage" type="button" @click="go('calendar')">加日程</button>
+                <button class="small-btn" type="button" @click="go('body')">记身体</button>
+                <button class="small-btn" type="button" @click="go('help')">发任务</button>
+              </div>
+            </div>
+
+            <p v-if="!timelineItems.length" class="empty-note">还没有动态。先添加一条日程、身体记录、问题或留言，时间线会自动汇总。</p>
+            <div v-else class="timeline-list">
+              <button
+                v-for="item in timelineItems"
+                :key="item.id"
+                class="timeline-item"
+                :class="`accent-${item.accent}`"
+                type="button"
+                @click="go(item.view)"
+              >
+                <span class="timeline-date">{{ item.dateLabel }}</span>
+                <span class="timeline-pin">
+                  <img :src="item.icon" alt="" aria-hidden="true" />
+                </span>
+                <span class="timeline-content">
+                  <span class="timeline-topline">
+                    <strong>{{ item.title }}</strong>
+                    <em>{{ item.type }}</em>
+                  </span>
+                  <span>{{ item.meta }}</span>
+                  <small>{{ item.detail }}</small>
+                </span>
+              </button>
+            </div>
+          </div>
+        </article>
+      </section>
+
       <section v-else-if="view === 'calendar'" class="single-stack">
         <article class="card">
           <header class="card-header">
@@ -904,18 +1358,53 @@ function mapMember(member) {
             </div>
             <span class="tag">站内提醒</span>
           </header>
-          <div class="card-body schedule full">
-            <p v-if="!events.length" class="empty-note">还没有日程。下方添加后会写入后端数据库。</p>
-            <div v-for="event in events" :key="event.id" class="schedule-row">
-              <strong class="time">{{ event.date }}<br />{{ event.time }}</strong>
-              <div>
-                <strong>{{ event.title }}</strong>
-                <span>{{ event.place }} · {{ event.note }}</span>
+          <div class="card-body">
+            <div class="calendar-board">
+              <div class="calendar-hero">
+                <div>
+                  <span class="calendar-kicker">本月安排</span>
+                  <strong>{{ calendarMonthLabel }}</strong>
+                  <p>{{ nextCalendarEvent ? `下一项：${nextCalendarEvent.date} ${nextCalendarEvent.time} · ${nextCalendarEvent.title}` : '暂无安排，下方添加后会出现在这里。' }}</p>
+                </div>
+                <div class="calendar-count">
+                  <strong>{{ events.length }}</strong>
+                  <span>个安排</span>
+                </div>
               </div>
-              <div class="row-actions">
-                <span class="tag">{{ event.tag }}</span>
-                <button class="small-btn" type="button" @click="editEvent(event)">编辑</button>
-                <button class="small-btn danger" type="button" @click="deleteEvent(event)">删除</button>
+
+              <div class="date-strip" aria-label="月内日期">
+                <div
+                  v-for="day in calendarEventDays"
+                  :key="day.key"
+                  class="date-chip"
+                  :class="{ today: day.isToday, filled: day.events?.length }"
+                >
+                  <span>{{ weekdayLabels[(new Date(day.key).getDay() + 6) % 7] }}</span>
+                  <strong>{{ day.day }}</strong>
+                  <small v-if="day.events.length">{{ day.events.length }}项</small>
+                </div>
+              </div>
+
+              <div class="agenda-panel calm-timeline">
+                <p v-if="!events.length" class="empty-note">还没有日程。下方添加后会写入后端数据库。</p>
+                <div v-for="event in upcomingEvents" :key="event.id" class="agenda-row">
+                  <div class="agenda-date">
+                    <strong>{{ event.day }}</strong>
+                    <span>{{ event.date }}</span>
+                  </div>
+                  <div class="agenda-content">
+                    <div class="agenda-title">
+                      <strong>{{ event.title }}</strong>
+                      <span class="tag">{{ event.tag }}</span>
+                    </div>
+                    <span>{{ event.time }} · {{ event.place }}</span>
+                    <p v-if="event.note">{{ event.note }}</p>
+                    <div class="row-actions">
+                      <button class="small-btn" type="button" @click="editEvent(event)">编辑</button>
+                      <button class="small-btn danger" type="button" @click="deleteEvent(event)">删除</button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="event-form">
@@ -954,8 +1443,8 @@ function mapMember(member) {
               </div>
             </div>
             <div class="form-row">
-              <input v-model="statusDraft" type="text" placeholder="补充今天的身体感受" />
-              <button class="small-btn sage" type="button" @click="saveStatus">保存记录</button>
+              <input v-model="statusDraft" type="text" placeholder="写一句今天的身体感受" />
+              <button class="small-btn sage" type="button" @click="saveStatus">记录今天状态</button>
               <button class="small-btn" type="button" @click="editLatestBodyRecord">编辑最近</button>
               <button class="small-btn danger" type="button" @click="deleteLatestBodyRecord">删除最近</button>
             </div>
@@ -1101,6 +1590,13 @@ function mapMember(member) {
             <span class="tag">默认最小可见</span>
           </header>
           <div class="card-body">
+            <div class="invite-guide">
+              <div>
+                <strong>邀请家人朋友查看这个空间</strong>
+                <span>输入对方昵称或备注后点击“生成邀请链接”，把链接发给对方。对方登录或注册后才会正式出现在成员列表里。</span>
+              </div>
+              <span class="tag">链接 7 天内有效</span>
+            </div>
             <div class="member-list">
               <div v-for="member in members" :key="member.id" class="member-row">
                 <div>
@@ -1109,14 +1605,13 @@ function mapMember(member) {
                 </div>
                 <div class="row-actions">
                   <span class="tag">{{ member.status }}</span>
-                  <button v-if="member.status === '待确认'" class="small-btn sage" type="button" @click="copyInviteLink(member)">复制邀请</button>
                   <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
                 </div>
               </div>
             </div>
             <div class="form-row">
               <input v-model="invitePhone" type="text" placeholder="输入手机号、昵称或邀请备注" />
-              <button class="small-btn" type="button" @click="inviteMember">邀请成员</button>
+              <button class="small-btn" type="button" @click="inviteMember">生成邀请链接</button>
               <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
               <button class="small-btn danger" type="button" @click="deleteAccount">删除账号</button>
             </div>
@@ -1142,7 +1637,7 @@ function mapMember(member) {
       </section>
 
       <div class="mobile-nav" aria-label="移动端导航">
-        <button v-for="item in navItems.slice(0, 6)" :key="item.id" :class="{ active: item.id === view }" type="button" @click="go(item.id)">
+        <button v-for="item in navItems" :key="item.id" :class="{ active: item.id === view }" type="button" @click="go(item.id)">
           <img class="icon" :src="item.icon" alt="" aria-hidden="true" />
           <span>{{ item.label }}</span>
         </button>
@@ -1150,5 +1645,40 @@ function mapMember(member) {
     </main>
 
     <div v-if="toastText" class="toast" role="status" aria-live="polite">{{ toastText }}</div>
+    <div v-if="dialog.open" class="modal-backdrop" role="presentation" @click.self="closeDialog(false)">
+      <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+        <div class="confirm-icon">
+          <img :src="dialog.icon" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">{{ dialog.eyebrow }}</p>
+          <h2 id="app-dialog-title">{{ dialog.title }}</h2>
+          <p v-if="dialog.message">{{ dialog.message }}</p>
+          <div v-if="dialog.mode === 'form'" class="dialog-fields">
+            <label v-for="field in dialog.fields" :key="field.name" class="dialog-field">
+              <span>{{ field.label }}</span>
+              <textarea
+                v-if="field.type === 'textarea'"
+                v-model="dialog.values[field.name]"
+                :readonly="field.readonly"
+                rows="4"
+              ></textarea>
+              <input
+                v-else
+                v-model="dialog.values[field.name]"
+                :readonly="field.readonly"
+                type="text"
+              />
+            </label>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="closeDialog(false)">{{ dialog.cancelText }}</button>
+          <button class="small-btn" :class="{ danger: dialog.danger, sage: !dialog.danger }" type="button" @click="submitDialog">
+            {{ dialog.confirmText }}
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>

@@ -47,6 +47,16 @@ public final class CareModels {
       MemberStatus status,
       Instant joinedAt) {}
 
+  public record SpaceInvite(
+      UUID token,
+      UUID spaceId,
+      String spaceName,
+      String patientNickname,
+      String nickname,
+      MemberRole role,
+      Instant expiresAt,
+      Instant createdAt) {}
+
   public record CareEvent(
       UUID id,
       UUID spaceId,
