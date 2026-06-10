@@ -8,6 +8,7 @@ import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
+import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
@@ -17,6 +18,7 @@ import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
+import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -225,6 +227,27 @@ public class CareController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteNote(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID noteId) {
     careService.deleteNote(currentUser(httpRequest).id(), spaceId, noteId);
+  }
+
+  @GetMapping("/spaces/{spaceId}/notices")
+  public Object listNotices(HttpServletRequest httpRequest, @PathVariable UUID spaceId) {
+    return careService.listNotices(currentUser(httpRequest).id(), spaceId);
+  }
+
+  @PostMapping("/spaces/{spaceId}/notices")
+  public Object createNotice(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @Valid @RequestBody CreateNoticeRequest request) {
+    return careService.createNotice(currentUser(httpRequest).id(), spaceId, request);
+  }
+
+  @PatchMapping("/spaces/{spaceId}/notices/{noticeId}")
+  public Object updateNotice(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID noticeId, @Valid @RequestBody UpdateNoticeRequest request) {
+    return careService.updateNotice(currentUser(httpRequest).id(), spaceId, noticeId, request);
+  }
+
+  @DeleteMapping("/spaces/{spaceId}/notices/{noticeId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void deleteNotice(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID noticeId) {
+    careService.deleteNotice(currentUser(httpRequest).id(), spaceId, noticeId);
   }
 
   private CurrentUser currentUser(HttpServletRequest request) {

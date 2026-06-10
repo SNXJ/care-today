@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -17,10 +18,13 @@ import com.caretoday.api.auth.CurrentUser;
 import com.caretoday.api.auth.JwtService;
 import com.caretoday.api.common.CorsConfig;
 import com.caretoday.api.care.CareModels.CareEvent;
+import com.caretoday.api.care.CareModels.CareNotice;
 import com.caretoday.api.care.CareModels.MemberRole;
 import com.caretoday.api.care.CareModels.MemberStatus;
+import com.caretoday.api.care.CareModels.NoticeStatus;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -103,6 +107,74 @@ class CareControllerTest {
             .header("Access-Control-Request-Method", "POST")
             .header("Access-Control-Request-Headers", "content-type,authorization"))
         .andExpect(status().isOk());
+  }
+
+  @Test
+  void createNoticeReturnsCreatedResource() throws Exception {
+    UUID noticeId = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    when(careService.createNotice(eq(USER_ID), eq(SPACE_ID), any()))
+        .thenReturn(new CareNotice(
+            noticeId,
+            SPACE_ID,
+            "化疗期间避免生食",
+            "包括生鱼片和未消毒奶制品",
+            true,
+            LocalDate.parse("2026-06-10"),
+            null,
+            NoticeStatus.ACTIVE,
+            Instant.parse("2026-06-10T02:00:00Z")));
+
+    mockMvc.perform(post("/api/spaces/{spaceId}/notices", SPACE_ID)
+            .with(currentUser())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"content\":\"化疗期间避免生食\",\"detail\":\"包括生鱼片和未消毒奶制品\",\"important\":true,\"startsOn\":\"2026-06-10\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(noticeId.toString()))
+        .andExpect(jsonPath("$.content").value("化疗期间避免生食"))
+        .andExpect(jsonPath("$.status").value("ACTIVE"));
+  }
+
+  @Test
+  void createNoticeWithoutContentReturnsBadRequest() throws Exception {
+    mockMvc.perform(post("/api/spaces/{spaceId}/notices", SPACE_ID)
+            .with(currentUser())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"detail\":\"缺少内容\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void updateNoticeArchivesResource() throws Exception {
+    UUID noticeId = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    when(careService.updateNotice(eq(USER_ID), eq(SPACE_ID), eq(noticeId), any()))
+        .thenReturn(new CareNotice(
+            noticeId,
+            SPACE_ID,
+            "化疗期间避免生食",
+            null,
+            false,
+            null,
+            null,
+            NoticeStatus.ARCHIVED,
+            Instant.parse("2026-06-10T02:00:00Z")));
+
+    mockMvc.perform(patch("/api/spaces/{spaceId}/notices/{noticeId}", SPACE_ID, noticeId)
+            .with(currentUser())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"status\":\"ARCHIVED\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("ARCHIVED"));
+  }
+
+  @Test
+  void deleteNoticeReturnsNoContent() throws Exception {
+    UUID noticeId = UUID.fromString("00000000-0000-0000-0000-000000000005");
+    doNothing().when(careService).deleteNotice(USER_ID, SPACE_ID, noticeId);
+
+    mockMvc.perform(delete("/api/spaces/{spaceId}/notices/{noticeId}", SPACE_ID, noticeId).with(currentUser()))
+        .andExpect(status().isNoContent());
+
+    verify(careService).deleteNotice(USER_ID, SPACE_ID, noticeId);
   }
 
   @Test
