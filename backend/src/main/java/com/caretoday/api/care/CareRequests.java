@@ -3,6 +3,7 @@ package com.caretoday.api.care;
 import com.caretoday.api.care.CareModels.MemberRole;
 import com.caretoday.api.care.CareModels.HelpTaskStatus;
 import com.caretoday.api.care.CareModels.NoteVisibility;
+import com.caretoday.api.care.CareModels.NoticeStatus;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
@@ -98,4 +99,19 @@ public final class CareRequests {
       String type,
       String content,
       NoteVisibility visibility) {}
+
+  public record CreateNoticeRequest(
+      @NotBlank String content,
+      String detail,
+      boolean important,
+      LocalDate startsOn,
+      LocalDate endsOn) {}
+
+  public record UpdateNoticeRequest(
+      String content,
+      String detail,
+      Boolean important,
+      LocalDate startsOn,
+      LocalDate endsOn,
+      NoticeStatus status) {}
 }

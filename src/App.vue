@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { createApi } from './api';
 
 import iconToday from './assets/icons/nav-today.svg';
@@ -26,6 +26,7 @@ const navItems = [
   { id: 'calendar', label: '日历', icon: iconCalendar },
   { id: 'body', label: '身体', icon: iconBody },
   { id: 'doctor', label: '问医生', icon: iconDoctor },
+  { id: 'notices', label: '注意', icon: iconWarning },
   { id: 'help', label: '帮忙墙', icon: iconHelp },
   { id: 'messages', label: '留言', icon: iconMessage },
   { id: 'folder', label: '资料夹', icon: iconFolder },
@@ -76,6 +77,14 @@ const messageDraft = ref('');
 const questionDraft = ref('');
 const taskDraft = ref('');
 const noteDraft = ref('');
+const noticeDraft = ref({
+  content: '',
+  detail: '',
+  important: false,
+  startsOn: '',
+  endsOn: '',
+});
+const detailItem = ref(null);
 const invitePhone = ref('');
 const eventDraft = ref({
   title: '',
@@ -105,12 +114,62 @@ const questions = ref([]);
 const helpTasks = ref([]);
 const messages = ref([]);
 const notes = ref([]);
+const notices = ref([]);
 const members = ref([]);
 
 const activeNav = computed(() => navItems.find((item) => item.id === view.value));
 const isAuthed = computed(() => Boolean(token.value && currentUser.value));
 const hasSpace = computed(() => Boolean(activeSpaceId.value));
-const nextVisitLabel = computed(() => events.value[0]?.date || '待添加');
+const todayKey = computed(() => toDateKey(new Date()));
+const todayLabel = computed(() => new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' }));
+const nextFutureEvent = computed(() => {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  return upcomingEvents.value.find((event) => new Date(event.scheduledAt) >= startOfToday) || null;
+});
+const nextVisitLabel = computed(() => nextFutureEvent.value?.date || '待添加');
+const nextVisitCountdown = computed(() => {
+  if (!nextFutureEvent.value) return null;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const eventDay = new Date(nextFutureEvent.value.scheduledAt);
+  eventDay.setHours(0, 0, 0, 0);
+  return Math.round((eventDay - startOfToday) / 86400000);
+});
+const todayEvents = computed(() => events.value.filter((event) => event.dateKey === todayKey.value));
+const todayTasks = computed(() =>
+  helpTasks.value.filter((task) => task.scheduledAt && toDateKey(new Date(task.scheduledAt)) === todayKey.value)
+);
+const todayItems = computed(() => {
+  const items = [
+    ...todayEvents.value.map((event) => ({
+      id: `event-${event.id}`,
+      time: event.time,
+      title: event.title,
+      desc: event.note || event.place,
+      tag: event.tag,
+      at: event.scheduledAt,
+    })),
+    ...todayTasks.value.map((task) => ({
+      id: `task-${task.id}`,
+      time: new Date(task.scheduledAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      title: task.title,
+      desc: task.claimedBy ? `认领人：${task.claimedBy}` : '还没人认领',
+      tag: task.status,
+      at: task.scheduledAt,
+    })),
+  ];
+  return items.sort((a, b) => new Date(a.at) - new Date(b.at));
+});
+const activeNotices = computed(() =>
+  notices.value.filter((notice) => {
+    if (notice.archived) return false;
+    if (notice.startsOn && notice.startsOn > todayKey.value) return false;
+    if (notice.endsOn && notice.endsOn < todayKey.value) return false;
+    return true;
+  })
+);
+const archivedNotices = computed(() => notices.value.filter((notice) => notice.archived));
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
 const calendarBaseDate = computed(() => {
   const firstEvent = events.value[0]?.scheduledAt ? new Date(events.value[0].scheduledAt) : new Date();
@@ -158,10 +217,15 @@ const timelineItems = computed(() => {
       meta: `${event.time} · ${event.place}`,
       detail: event.note || (event.needsCompanion ? '需要有人陪同' : '站内提醒'),
       at: event.scheduledAt,
-      dateLabel: event.date,
       icon: iconCalendar,
       view: 'calendar',
       accent: 'rose',
+      fields: [
+        { label: '时间', value: formatFullDateTime(event.scheduledAt) },
+        { label: '地点', value: event.place },
+        { label: '陪同', value: event.needsCompanion ? '需要有人陪同' : '不需要陪同' },
+        { label: '备注', value: event.note || '没有备注' },
+      ],
     })),
     ...bodyRecordItems.value.map((record) => ({
       id: `body-${record.id}`,
@@ -170,10 +234,18 @@ const timelineItems = computed(() => {
       meta: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 体温 ${record.temperature}℃`,
       detail: record.note || '没有补充备注',
       at: record.createdAt || record.recordDate,
-      dateLabel: formatTimelineDate(record.createdAt || record.recordDate),
       icon: iconBody,
       view: 'body',
       accent: 'sage',
+      fields: [
+        { label: '记录时间', value: formatFullDateTime(record.createdAt || record.recordDate) },
+        {
+          label: '评分',
+          value: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 睡眠 ${record.sleepScore}/10 · 心情 ${record.moodScore}/10 · 食欲 ${record.appetiteScore}/10`,
+        },
+        { label: '体温', value: `${record.temperature}℃` },
+        { label: '备注', value: record.note || '没有补充备注' },
+      ],
     })),
     ...questions.value.map((question) => ({
       id: `question-${question.id}`,
@@ -182,10 +254,14 @@ const timelineItems = computed(() => {
       meta: question.done ? '已问过医生' : question.important ? '重点问题' : '待复诊时确认',
       detail: question.answer || '还没有记录医生回复',
       at: question.createdAt,
-      dateLabel: formatTimelineDate(question.createdAt),
       icon: iconDoctor,
       view: 'doctor',
       accent: 'blue',
+      fields: [
+        { label: '添加时间', value: formatFullDateTime(question.createdAt) },
+        { label: '状态', value: `${question.done ? '已问过医生' : '待复诊时确认'}${question.important ? ' · 重点问题' : ''}` },
+        { label: '医生答复', value: question.answer || '还没有记录医生回复' },
+      ],
     })),
     ...helpTasks.value.map((task) => ({
       id: `task-${task.id}`,
@@ -193,11 +269,17 @@ const timelineItems = computed(() => {
       title: task.title,
       meta: `${task.status} · ${task.time}`,
       detail: task.desc,
-      at: task.createdAt || task.scheduledAt,
-      dateLabel: formatTimelineDate(task.createdAt || task.scheduledAt),
+      at: task.scheduledAt || task.createdAt,
       icon: iconHelp,
       view: 'help',
       accent: 'amber',
+      fields: [
+        { label: '类型', value: task.type },
+        { label: '约定时间', value: task.time },
+        { label: '状态', value: task.status },
+        { label: '认领人', value: task.claimedBy || '还没人认领' },
+        { label: '说明', value: task.desc },
+      ],
     })),
     ...messages.value.map((message) => ({
       id: `message-${message.id}`,
@@ -206,10 +288,14 @@ const timelineItems = computed(() => {
       meta: message.author,
       detail: '一条陪伴留言',
       at: message.createdAt,
-      dateLabel: formatTimelineDate(message.createdAt),
       icon: iconMessage,
       view: 'messages',
       accent: 'rose',
+      fields: [
+        { label: '留言人', value: message.author },
+        { label: '时间', value: formatFullDateTime(message.createdAt) },
+        { label: '内容', value: message.text },
+      ],
     })),
     ...notes.value.map((note) => ({
       id: `note-${note.id}`,
@@ -218,18 +304,30 @@ const timelineItems = computed(() => {
       meta: `${note.type} · ${note.visibility}`,
       detail: note.content || '资料文本已保存',
       at: note.createdAt,
-      dateLabel: formatTimelineDate(note.createdAt),
       icon: iconFolder,
       view: 'folder',
       accent: 'sage',
+      fields: [
+        { label: '类型', value: note.type },
+        { label: '可见范围', value: note.visibility },
+        { label: '创建时间', value: formatFullDateTime(note.createdAt) },
+        { label: '内容', value: note.content || '资料文本已保存' },
+      ],
     })),
+    ...notices.value.map(noticeTimelineItem),
   ];
 
   return items
     .filter((item) => item.at)
-    .sort((a, b) => new Date(b.at) - new Date(a.at))
-    .slice(0, 30);
+    .map((item) => ({
+      ...item,
+      dateLabel: formatTimelineDate(item.at),
+      timeLabel: formatTimelineTime(item.at),
+    }))
+    .sort((a, b) => new Date(b.at) - new Date(a.at));
 });
+const timelineFutureItems = computed(() => timelineItems.value.filter((item) => isAfterToday(item.at)));
+const timelinePastItems = computed(() => timelineItems.value.filter((item) => !isAfterToday(item.at)));
 const bodyRecordPayload = computed(() => ({
   painScore: Number(bodyRecords.value.find((item) => item.label === '疼痛')?.value || 0),
   fatigueScore: Number(bodyRecords.value.find((item) => item.label === '乏力')?.value || 0),
@@ -261,7 +359,68 @@ function showToast(text) {
 
 function go(nextView) {
   view.value = nextView;
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (nextView !== 'timeline') {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+
+watch(view, async (next) => {
+  if (next !== 'timeline') return;
+  await nextTick();
+  document.getElementById('timeline-today-divider')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+});
+
+function isAfterToday(value) {
+  const endOfToday = new Date();
+  endOfToday.setHours(23, 59, 59, 999);
+  return new Date(value) > endOfToday;
+}
+
+function noticeTimelineItem(notice) {
+  return {
+    id: `notice-${notice.id}`,
+    type: '注意',
+    title: notice.content,
+    meta: `${notice.important ? '重要 · ' : ''}${noticeRangeLabel(notice)}`,
+    detail: notice.detail || '添加了一条注意事项',
+    at: notice.createdAt,
+    dateLabel: formatTimelineDate(notice.createdAt),
+    timeLabel: formatTimelineTime(notice.createdAt),
+    icon: iconWarning,
+    view: 'notices',
+    accent: 'amber',
+    fields: [
+      { label: '生效期', value: noticeRangeLabel(notice) },
+      { label: '重要程度', value: notice.important ? '重要' : '一般' },
+      { label: '补充说明', value: notice.detail || '没有补充说明' },
+      { label: '添加时间', value: formatFullDateTime(notice.createdAt) },
+    ],
+  };
+}
+
+function noticeRangeLabel(notice) {
+  if (notice.startsOn && notice.endsOn) return `${notice.startsOn} 至 ${notice.endsOn}`;
+  if (notice.startsOn) return `${notice.startsOn} 起生效`;
+  if (notice.endsOn) return `${notice.endsOn} 前有效`;
+  return '长期有效';
+}
+
+function openTimelineDetail(item) {
+  detailItem.value = item;
+}
+
+function openNoticeDetail(notice) {
+  detailItem.value = noticeTimelineItem(notice);
+}
+
+function closeDetail() {
+  detailItem.value = null;
+}
+
+function goFromDetail() {
+  const target = detailItem.value?.view;
+  detailItem.value = null;
+  if (target) go(target);
 }
 
 async function withLoading(action) {
@@ -418,6 +577,7 @@ function logout() {
   helpTasks.value = [];
   messages.value = [];
   notes.value = [];
+  notices.value = [];
   members.value = [];
   localStorage.removeItem('care-today-token');
   localStorage.removeItem('care-today-user');
@@ -453,7 +613,7 @@ async function selectSpace(spaceId) {
   const detail = await api.getSpace(spaceId);
   activeSpace.value = detail.space;
   members.value = (detail.members || []).map(mapMember);
-  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadHelpTasks(), loadMessages(), loadNotes()]);
+  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadHelpTasks(), loadMessages(), loadNotes(), loadNotices()]);
 }
 
 async function loadEvents() {
@@ -501,6 +661,10 @@ async function loadMessages() {
 
 async function loadNotes() {
   notes.value = (await api.listNotes(activeSpaceId.value)).map(mapNote);
+}
+
+async function loadNotices() {
+  notices.value = (await api.listNotices(activeSpaceId.value)).map(mapNotice);
 }
 
 function openQuickNeed(need) {
@@ -842,6 +1006,78 @@ async function deleteNote(note) {
   });
 }
 
+async function addNotice() {
+  if (!noticeDraft.value.content.trim()) {
+    showToast('先写下要注意的事');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createNotice(activeSpaceId.value, {
+      content: noticeDraft.value.content.trim(),
+      detail: noticeDraft.value.detail.trim() || undefined,
+      important: noticeDraft.value.important,
+      startsOn: noticeDraft.value.startsOn || undefined,
+      endsOn: noticeDraft.value.endsOn || undefined,
+    });
+    noticeDraft.value = { content: '', detail: '', important: false, startsOn: '', endsOn: '' };
+    await loadNotices();
+    showToast('注意事项已记录');
+  });
+}
+
+async function editNotice(notice) {
+  const values = await openFormDialog({
+    eyebrow: '注意事项',
+    title: '编辑注意事项',
+    icon: iconWarning,
+    fields: [
+      { name: 'content', label: '内容', value: notice.content, required: true, type: 'textarea' },
+      { name: 'detail', label: '补充说明', value: notice.detail || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
+  await withLoading(async () => {
+    await api.updateNotice(activeSpaceId.value, notice.id, {
+      content: values.content.trim(),
+      detail: values.detail ?? notice.detail ?? '',
+    });
+    await loadNotices();
+    showToast('注意事项已更新');
+  });
+}
+
+async function toggleNoticeImportant(notice) {
+  await withLoading(async () => {
+    await api.updateNotice(activeSpaceId.value, notice.id, { important: !notice.important });
+    await loadNotices();
+  });
+}
+
+async function archiveNotice(notice) {
+  await withLoading(async () => {
+    await api.updateNotice(activeSpaceId.value, notice.id, { status: notice.archived ? 'ACTIVE' : 'ARCHIVED' });
+    await loadNotices();
+    showToast(notice.archived ? '注意事项已恢复' : '注意事项已归档');
+  });
+}
+
+async function deleteNotice(notice) {
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除注意事项',
+    title: '删除这条注意事项？',
+    message: notice.content,
+    icon: iconWarning,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
+  await withLoading(async () => {
+    await api.deleteNotice(activeSpaceId.value, notice.id);
+    await loadNotices();
+    showToast('注意事项已删除');
+  });
+}
+
 async function inviteMember() {
   if (!invitePhone.value.trim()) {
     showToast('先填写手机号或备注名');
@@ -1037,11 +1273,38 @@ function mapNote(note) {
   };
 }
 
+function mapNotice(notice) {
+  return {
+    id: notice.id,
+    content: notice.content,
+    detail: notice.detail || '',
+    important: notice.important,
+    startsOn: notice.startsOn || '',
+    endsOn: notice.endsOn || '',
+    archived: notice.status === 'ARCHIVED',
+    createdAt: notice.createdAt,
+  };
+}
+
 function formatTimelineDate(value) {
   if (!value) return '待记录';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '待记录';
-  return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+  const sameYear = date.getFullYear() === new Date().getFullYear();
+  return date.toLocaleDateString('zh-CN', sameYear ? { month: 'short', day: 'numeric' } : { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatTimelineTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function formatFullDateTime(value) {
+  if (!value) return '待记录';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '待记录';
+  return date.toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function mapMember(member) {
@@ -1192,26 +1455,30 @@ function mapMember(member) {
             <header class="card-header">
               <div class="card-title">
                 <img class="icon" :src="iconCalendar" alt="" aria-hidden="true" />
-                <h2>今日安排</h2>
+                <h2>今天要做的事</h2>
               </div>
               <span class="tag">下次复诊：{{ nextVisitLabel }}</span>
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
-                <p v-if="!events.length" class="empty-note">还没有日程。到“日历”页添加复诊、检查或用药提醒。</p>
-                <div v-for="event in events.slice(0, 3)" :key="event.id" class="schedule-row">
-                  <strong class="time">{{ event.time }}</strong>
+                <button v-for="notice in activeNotices" :key="notice.id" class="notice-strip" :class="{ important: notice.important }" type="button" @click="openNoticeDetail(notice)">
+                  <img :src="iconWarning" alt="" aria-hidden="true" />
+                  <span>注意：{{ notice.content }}</span>
+                </button>
+                <p v-if="!todayItems.length" class="empty-note">今天没有要做的事，好好休息。日历和帮忙墙里的安排到了当天会出现在这里。</p>
+                <div v-for="item in todayItems" :key="item.id" class="schedule-row">
+                  <strong class="time">{{ item.time }}</strong>
                   <div>
-                    <strong>{{ event.title }}</strong>
-                    <span>{{ event.note }}</span>
+                    <strong>{{ item.title }}</strong>
+                    <span>{{ item.desc }}</span>
                   </div>
-                  <span class="tag">{{ event.tag }}</span>
+                  <span class="tag">{{ item.tag }}</span>
                 </div>
               </div>
               <div class="countdown">
                 <span>距离下次复诊</span>
-                <strong>9</strong>
-                  <small>把资料和问题提前整理好，不用临时回忆。</small>
+                <strong>{{ nextVisitCountdown === null ? '—' : nextVisitCountdown }}</strong>
+                <small>{{ nextVisitCountdown === null ? '还没有安排日程，到“日历”页添加复诊或检查。' : nextVisitCountdown === 0 ? '就是今天，把资料和问题清单带上。' : '把资料和问题提前整理好，不用临时回忆。' }}</small>
                 <button class="small-btn" type="button" @click="go('folder')">整理复诊资料</button>
               </div>
             </div>
@@ -1261,40 +1528,6 @@ function mapMember(member) {
             </div>
           </article>
 
-          <article class="card">
-            <header class="card-header">
-              <div class="card-title">
-                <img class="icon" :src="iconHelp" alt="" aria-hidden="true" />
-                <h2>待认领帮忙任务</h2>
-              </div>
-            </header>
-            <div class="card-body mini-list">
-              <p v-if="!helpTasks.filter((item) => item.status === '待认领').length" class="empty-note">暂无待认领任务。</p>
-              <div v-for="task in helpTasks.filter((item) => item.status === '待认领').slice(0, 3)" :key="task.id" class="mini-row">
-                <div>
-                  <strong>{{ task.title }}</strong>
-                  <span>{{ task.time }}</span>
-                </div>
-                <button class="claim-btn" type="button" @click="claimTask(task)">认领</button>
-              </div>
-            </div>
-          </article>
-
-          <article class="card">
-            <header class="card-header">
-              <div class="card-title">
-                <img class="icon" :src="iconMessage" alt="" aria-hidden="true" />
-                <h2>温柔留言</h2>
-              </div>
-            </header>
-            <div class="card-body message-list">
-              <p v-if="!messages.length" class="empty-note">还没有留言。</p>
-              <div v-for="message in messages.slice(0, 2)" :key="message.id" class="message">
-                <p>{{ message.text }}</p>
-                <span>{{ message.author }} · {{ message.time }}</span>
-              </div>
-            </div>
-          </article>
         </aside>
       </section>
 
@@ -1305,33 +1538,60 @@ function mapMember(member) {
               <img class="icon" :src="iconTimeline" alt="" aria-hidden="true" />
               <h2>陪伴时间线</h2>
             </div>
-            <span class="tag">{{ timelineItems.length ? `最近 ${timelineItems.length} 条` : '暂无动态' }}</span>
+            <span class="tag">{{ timelineItems.length ? `共 ${timelineItems.length} 条` : '暂无动态' }}</span>
           </header>
           <div class="card-body">
             <div class="timeline-summary">
               <div>
-                <span class="calendar-kicker">最近发生的事</span>
+                <span class="calendar-kicker">过去和未来都在这里</span>
                 <strong>{{ activeSpace?.patientNickname || currentUser.nickname }} 的照护动态</strong>
-                <p>把日程、身体记录、问题清单、帮忙任务、留言和资料更新放到同一个视图里，先看全局，再去具体模块处理。</p>
+                <p>日程、身体记录、问题清单、注意事项、帮忙任务、留言和资料都会汇总到这条时间线上。往上看接下来的计划，往下看已经发生的事，点击任何一条可以查看详情。</p>
               </div>
               <div class="timeline-jump">
                 <button class="small-btn sage" type="button" @click="go('calendar')">加日程</button>
                 <button class="small-btn" type="button" @click="go('body')">记身体</button>
-                <button class="small-btn" type="button" @click="go('help')">发任务</button>
+                <button class="small-btn" type="button" @click="go('notices')">记注意</button>
               </div>
             </div>
 
             <p v-if="!timelineItems.length" class="empty-note">还没有动态。先添加一条日程、身体记录、问题或留言，时间线会自动汇总。</p>
             <div v-else class="timeline-list">
               <button
-                v-for="item in timelineItems"
+                v-for="item in timelineFutureItems"
                 :key="item.id"
                 class="timeline-item"
                 :class="`accent-${item.accent}`"
                 type="button"
-                @click="go(item.view)"
+                @click="openTimelineDetail(item)"
               >
-                <span class="timeline-date">{{ item.dateLabel }}</span>
+                <span class="timeline-date">{{ item.dateLabel }}<small>{{ item.timeLabel }}</small></span>
+                <span class="timeline-pin">
+                  <img :src="item.icon" alt="" aria-hidden="true" />
+                </span>
+                <span class="timeline-content">
+                  <span class="timeline-topline">
+                    <strong>{{ item.title }}</strong>
+                    <em>{{ item.type }}</em>
+                  </span>
+                  <span>{{ item.meta }}</span>
+                  <small>{{ item.detail }}</small>
+                </span>
+              </button>
+
+              <div id="timeline-today-divider" class="timeline-divider" role="separator">
+                <span>今天 · {{ todayLabel }}</span>
+              </div>
+
+              <p v-if="!timelinePastItems.length" class="empty-note">今天和之前还没有记录。</p>
+              <button
+                v-for="item in timelinePastItems"
+                :key="item.id"
+                class="timeline-item"
+                :class="`accent-${item.accent}`"
+                type="button"
+                @click="openTimelineDetail(item)"
+              >
+                <span class="timeline-date">{{ item.dateLabel }}<small>{{ item.timeLabel }}</small></span>
                 <span class="timeline-pin">
                   <img :src="item.icon" alt="" aria-hidden="true" />
                 </span>
@@ -1483,6 +1743,72 @@ function mapMember(member) {
               <button class="small-btn" type="button" @click="addQuestion">添加</button>
             </div>
           </div>
+        </article>
+      </section>
+
+      <section v-else-if="view === 'notices'" class="single-stack">
+        <article class="card">
+          <header class="card-header">
+            <div class="card-title">
+              <img class="icon" :src="iconWarning" alt="" aria-hidden="true" />
+              <h2>注意事项</h2>
+            </div>
+            <span class="tag">生效中的会显示在“今天”</span>
+          </header>
+          <div class="card-body">
+            <p class="section-hint">把医生的叮嘱和生活禁忌记在这里，例如“化疗期间避免生食”“术后两周不要提重物”。生效中的注意事项会置顶显示在“今天”页面，添加动态会进入时间线。</p>
+            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。下方添加后全家都能看到。</p>
+            <div class="notice-list">
+              <div v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }">
+                <img :src="iconWarning" alt="" aria-hidden="true" />
+                <div>
+                  <strong>{{ notice.content }}</strong>
+                  <span>{{ noticeRangeLabel(notice) }}<template v-if="notice.detail"> · {{ notice.detail }}</template></span>
+                </div>
+                <div class="row-actions">
+                  <button class="mark-btn" :class="{ active: notice.important }" type="button" @click="toggleNoticeImportant(notice)">重要</button>
+                  <button class="small-btn" type="button" @click="editNotice(notice)">编辑</button>
+                  <button class="small-btn" type="button" @click="archiveNotice(notice)">归档</button>
+                  <button class="small-btn danger" type="button" @click="deleteNotice(notice)">删除</button>
+                </div>
+              </div>
+            </div>
+            <div v-if="archivedNotices.length" class="notice-archived">
+              <p class="section-hint">已归档（不再显示在“今天”）</p>
+              <div v-for="notice in archivedNotices" :key="notice.id" class="notice-row archived">
+                <img :src="iconWarning" alt="" aria-hidden="true" />
+                <div>
+                  <strong>{{ notice.content }}</strong>
+                  <span>{{ noticeRangeLabel(notice) }}</span>
+                </div>
+                <div class="row-actions">
+                  <button class="small-btn" type="button" @click="archiveNotice(notice)">恢复</button>
+                  <button class="small-btn danger" type="button" @click="deleteNotice(notice)">删除</button>
+                </div>
+              </div>
+            </div>
+            <div class="event-form">
+              <input v-model="noticeDraft.content" type="text" placeholder="要注意的事，例如：化疗期间避免生食" />
+              <input v-model="noticeDraft.detail" type="text" placeholder="补充说明，可选" />
+              <label class="inline-check">
+                <span>开始</span>
+                <input v-model="noticeDraft.startsOn" type="date" />
+              </label>
+              <label class="inline-check">
+                <span>结束</span>
+                <input v-model="noticeDraft.endsOn" type="date" />
+              </label>
+              <label class="inline-check">
+                <input v-model="noticeDraft.important" type="checkbox" />
+                <span>重要</span>
+              </label>
+              <button class="small-btn sage" type="button" @click="addNotice">添加注意事项</button>
+            </div>
+            <p class="section-hint">开始和结束日期都可以不填，表示长期有效。</p>
+          </div>
+        </article>
+        <article class="card urgent">
+          <div class="card-body boundary">{{ disclaimer }}</div>
         </article>
       </section>
 
@@ -1645,6 +1971,27 @@ function mapMember(member) {
     </main>
 
     <div v-if="toastText" class="toast" role="status" aria-live="polite">{{ toastText }}</div>
+    <div v-if="detailItem" class="modal-backdrop" role="presentation" @click.self="closeDetail">
+      <section class="confirm-dialog detail-dialog" role="dialog" aria-modal="true" aria-labelledby="detail-dialog-title">
+        <div class="confirm-icon" :class="`accent-${detailItem.accent}`">
+          <img :src="detailItem.icon" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">{{ detailItem.type }} · {{ detailItem.dateLabel }}</p>
+          <h2 id="detail-dialog-title">{{ detailItem.title }}</h2>
+          <dl class="detail-fields">
+            <div v-for="field in detailItem.fields" :key="field.label">
+              <dt>{{ field.label }}</dt>
+              <dd>{{ field.value }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="goFromDetail">去对应页面处理</button>
+          <button class="small-btn sage" type="button" @click="closeDetail">知道了</button>
+        </div>
+      </section>
+    </div>
     <div v-if="dialog.open" class="modal-backdrop" role="presentation" @click.self="closeDialog(false)">
       <section class="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
         <div class="confirm-icon">

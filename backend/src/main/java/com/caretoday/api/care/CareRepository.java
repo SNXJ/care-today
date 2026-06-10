@@ -9,7 +9,9 @@ import com.caretoday.api.care.CareModels.HelpTask;
 import com.caretoday.api.care.CareModels.HelpTaskStatus;
 import com.caretoday.api.care.CareModels.MemberRole;
 import com.caretoday.api.care.CareModels.MemberStatus;
+import com.caretoday.api.care.CareModels.CareNotice;
 import com.caretoday.api.care.CareModels.NoteVisibility;
+import com.caretoday.api.care.CareModels.NoticeStatus;
 import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
@@ -17,11 +19,13 @@ import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
+import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
 import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
+import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
 import com.caretoday.api.common.RequestAuditContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -721,6 +725,77 @@ public class CareRepository {
     return softDelete("notes", spaceId, noteId);
   }
 
+  public List<CareNotice> listNotices(UUID spaceId) {
+    return jdbcTemplate.query(
+        """
+        SELECT id, space_id, content, detail, important, starts_on, ends_on, status, created_at
+        FROM care_notices
+        WHERE space_id = ? AND deleted_at IS NULL
+        ORDER BY created_at DESC
+        """,
+        (rs, rowNum) -> mapNotice(rs),
+        id(spaceId));
+  }
+
+  public Optional<CareNotice> findNotice(UUID noticeId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, content, detail, important, starts_on, ends_on, status, created_at
+            FROM care_notices
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapNotice(rs),
+            id(noticeId))
+        .stream()
+        .findFirst();
+  }
+
+  public CareNotice createNotice(UUID spaceId, UUID userId, CreateNoticeRequest request) {
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
+        """
+        INSERT INTO care_notices (id, space_id, content, detail, important, starts_on, ends_on, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        id(id),
+        id(spaceId),
+        request.content(),
+        request.detail(),
+        request.important(),
+        request.startsOn() == null ? null : java.sql.Date.valueOf(request.startsOn()),
+        request.endsOn() == null ? null : java.sql.Date.valueOf(request.endsOn()),
+        id(userId));
+    return findNotice(id).orElseThrow();
+  }
+
+  public Optional<CareNotice> updateNotice(UUID spaceId, UUID noticeId, UpdateNoticeRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE care_notices
+        SET content = COALESCE(?, content),
+            detail = COALESCE(?, detail),
+            important = COALESCE(?, important),
+            starts_on = COALESCE(?, starts_on),
+            ends_on = COALESCE(?, ends_on),
+            status = COALESCE(?, status),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.content()),
+        request.detail(),
+        request.important(),
+        request.startsOn() == null ? null : java.sql.Date.valueOf(request.startsOn()),
+        request.endsOn() == null ? null : java.sql.Date.valueOf(request.endsOn()),
+        request.status() == null ? null : request.status().name().toLowerCase(),
+        id(noticeId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findNotice(noticeId);
+  }
+
+  public boolean deleteNotice(UUID spaceId, UUID noticeId) {
+    return softDelete("care_notices", spaceId, noticeId);
+  }
+
   public void audit(UUID spaceId, UUID userId, String action, String targetType, UUID targetId) {
     audit(spaceId, userId, action, targetType, targetId, RequestAuditContext.ipAddress(), RequestAuditContext.userAgent());
   }
@@ -849,6 +924,19 @@ public class CareRepository {
         rs.getString("type"),
         rs.getString("content"),
         NoteVisibility.valueOf(rs.getString("visibility").toUpperCase()),
+        toInstant(rs, "created_at"));
+  }
+
+  private CareNotice mapNotice(ResultSet rs) throws SQLException {
+    return new CareNotice(
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
+        rs.getString("content"),
+        rs.getString("detail"),
+        rs.getBoolean("important"),
+        rs.getDate("starts_on") == null ? null : rs.getDate("starts_on").toLocalDate(),
+        rs.getDate("ends_on") == null ? null : rs.getDate("ends_on").toLocalDate(),
+        NoticeStatus.valueOf(rs.getString("status").toUpperCase()),
         toInstant(rs, "created_at"));
   }
 

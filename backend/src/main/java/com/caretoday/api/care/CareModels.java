@@ -32,6 +32,11 @@ public final class CareModels {
     MEMBERS
   }
 
+  public enum NoticeStatus {
+    ACTIVE,
+    ARCHIVED
+  }
+
   public record CareSpace(
       UUID id,
       String name,
@@ -114,5 +119,16 @@ public final class CareModels {
       String type,
       String content,
       NoteVisibility visibility,
+      Instant createdAt) {}
+
+  public record CareNotice(
+      UUID id,
+      UUID spaceId,
+      String content,
+      String detail,
+      boolean important,
+      LocalDate startsOn,
+      LocalDate endsOn,
+      NoticeStatus status,
       Instant createdAt) {}
 }

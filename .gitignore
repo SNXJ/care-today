@@ -4,3 +4,5 @@ dist/
 target/
 *.log
 deploy/certs/
+backups/
+.claude/

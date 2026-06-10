@@ -3,6 +3,7 @@ package com.caretoday.api.care;
 import com.caretoday.api.care.CareModels.BodyRecord;
 import com.caretoday.api.care.CareModels.CareEvent;
 import com.caretoday.api.care.CareModels.CareNote;
+import com.caretoday.api.care.CareModels.CareNotice;
 import com.caretoday.api.care.CareModels.CareSpace;
 import com.caretoday.api.care.CareModels.DoctorQuestion;
 import com.caretoday.api.care.CareModels.HelpTask;
@@ -16,6 +17,7 @@ import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
+import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
@@ -25,6 +27,7 @@ import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
+import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -312,6 +315,34 @@ public class CareService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Note not found");
     }
     careRepository.audit(spaceId, currentUserId, "note.delete", "note", noteId);
+  }
+
+  public List<CareNotice> listNotices(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
+    return careRepository.listNotices(spaceId);
+  }
+
+  public CareNotice createNotice(UUID currentUserId, UUID spaceId, CreateNoticeRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    CareNotice notice = careRepository.createNotice(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "notice.create", "care_notice", notice.id());
+    return notice;
+  }
+
+  public CareNotice updateNotice(UUID currentUserId, UUID spaceId, UUID noticeId, UpdateNoticeRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    CareNotice notice = careRepository.updateNotice(spaceId, noticeId, request)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Notice not found"));
+    careRepository.audit(spaceId, currentUserId, "notice.update", "care_notice", notice.id());
+    return notice;
+  }
+
+  public void deleteNotice(UUID currentUserId, UUID spaceId, UUID noticeId) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (!careRepository.deleteNotice(spaceId, noticeId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notice not found");
+    }
+    careRepository.audit(spaceId, currentUserId, "notice.delete", "care_notice", noticeId);
   }
 
   private void ensureActiveMember(UUID spaceId, UUID currentUserId) {
