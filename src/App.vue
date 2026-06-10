@@ -7,11 +7,8 @@ import iconTimeline from './assets/icons/nav-timeline.svg';
 import iconCalendar from './assets/icons/nav-calendar.svg';
 import iconDoctor from './assets/icons/nav-doctor.svg';
 import iconBody from './assets/icons/nav-body.svg';
-import iconHelp from './assets/icons/nav-help.svg';
 import iconMessage from './assets/icons/nav-message.svg';
 import iconFolder from './assets/icons/nav-folder.svg';
-import iconHospital from './assets/icons/action-hospital.svg';
-import iconTask from './assets/icons/action-task.svg';
 import iconChat from './assets/icons/action-chat.svg';
 import iconPrivacy from './assets/icons/status-privacy.svg';
 import iconWarning from './assets/icons/status-warning.svg';
@@ -23,20 +20,9 @@ const disclaimer =
 const navItems = [
   { id: 'today', label: '今天', icon: iconToday },
   { id: 'timeline', label: '时间线', icon: iconTimeline },
-  { id: 'calendar', label: '日历', icon: iconCalendar },
+  { id: 'moments', label: '朋友圈', icon: iconChat },
   { id: 'body', label: '身体', icon: iconBody },
-  { id: 'doctor', label: '问医生', icon: iconDoctor },
   { id: 'notices', label: '注意', icon: iconWarning },
-  { id: 'help', label: '帮忙墙', icon: iconHelp },
-  { id: 'messages', label: '留言', icon: iconMessage },
-  { id: 'folder', label: '资料夹', icon: iconFolder },
-  { id: 'members', label: '成员', icon: iconLock },
-];
-
-const quickNeeds = [
-  { label: '安排陪诊', desc: '去日历填写时间、地点和资料', icon: iconHospital, view: 'calendar' },
-  { label: '发布帮忙任务', desc: '买药、做饭、接送都可以认领', icon: iconTask, view: 'help' },
-  { label: '写一条留言', desc: '给家人朋友留一句想说的话', icon: iconChat, view: 'messages' },
 ];
 
 const view = ref('today');
@@ -75,8 +61,14 @@ const statusNote = ref('');
 const statusDraft = ref('');
 const messageDraft = ref('');
 const questionDraft = ref('');
-const taskDraft = ref('');
 const noteDraft = ref('');
+const composerOpen = ref(false);
+const questionsOpen = ref(false);
+const folderOpen = ref(false);
+const membersOpen = ref(false);
+const currentRole = ref(localStorage.getItem('care-today-role') || '');
+const trendMetric = ref('疼痛');
+const trendDays = ref(7);
 const noticeDraft = ref({
   content: '',
   detail: '',
@@ -86,13 +78,6 @@ const noticeDraft = ref({
 });
 const detailItem = ref(null);
 const invitePhone = ref('');
-const eventDraft = ref({
-  title: '',
-  scheduledAt: '',
-  location: '',
-  note: '',
-  needsCompanion: false,
-});
 const privacyAccepted = ref(false);
 const api = createApi(() => token.value);
 
@@ -111,7 +96,6 @@ const bodyRecords = ref([
 ]);
 
 const questions = ref([]);
-const helpTasks = ref([]);
 const messages = ref([]);
 const notes = ref([]);
 const notices = ref([]);
@@ -137,30 +121,19 @@ const nextVisitCountdown = computed(() => {
   return Math.round((eventDay - startOfToday) / 86400000);
 });
 const todayEvents = computed(() => events.value.filter((event) => event.dateKey === todayKey.value));
-const todayTasks = computed(() =>
-  helpTasks.value.filter((task) => task.scheduledAt && toDateKey(new Date(task.scheduledAt)) === todayKey.value)
-);
-const todayItems = computed(() => {
-  const items = [
-    ...todayEvents.value.map((event) => ({
+const todayItems = computed(() =>
+  todayEvents.value
+    .map((event) => ({
       id: `event-${event.id}`,
       time: event.time,
       title: event.title,
       desc: event.note || event.place,
       tag: event.tag,
       at: event.scheduledAt,
-    })),
-    ...todayTasks.value.map((task) => ({
-      id: `task-${task.id}`,
-      time: new Date(task.scheduledAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
-      title: task.title,
-      desc: task.claimedBy ? `认领人：${task.claimedBy}` : '还没人认领',
-      tag: task.status,
-      at: task.scheduledAt,
-    })),
-  ];
-  return items.sort((a, b) => new Date(a.at) - new Date(b.at));
-});
+    }))
+    .sort((a, b) => new Date(a.at) - new Date(b.at))
+);
+const isPatient = computed(() => currentRole.value === 'PATIENT_ADMIN');
 const activeNotices = computed(() =>
   notices.value.filter((notice) => {
     if (notice.archived) return false;
@@ -170,55 +143,22 @@ const activeNotices = computed(() =>
   })
 );
 const archivedNotices = computed(() => notices.value.filter((notice) => notice.archived));
-const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
-const calendarBaseDate = computed(() => {
-  const firstEvent = events.value[0]?.scheduledAt ? new Date(events.value[0].scheduledAt) : new Date();
-  return Number.isNaN(firstEvent.getTime()) ? new Date() : firstEvent;
-});
-const calendarMonthLabel = computed(() =>
-  calendarBaseDate.value.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long' })
-);
-const calendarDays = computed(() => {
-  const base = calendarBaseDate.value;
-  const year = base.getFullYear();
-  const month = base.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const offset = (firstDay.getDay() + 6) % 7;
-  const todayKey = toDateKey(new Date());
-
-  return Array.from({ length: offset + daysInMonth }, (_, index) => {
-    if (index < offset) {
-      return { key: `empty-${index}`, empty: true };
-    }
-    const day = index - offset + 1;
-    const date = new Date(year, month, day);
-    const key = toDateKey(date);
-    const dayEvents = events.value.filter((event) => event.dateKey === key);
-    return {
-      key,
-      day,
-      isToday: key === todayKey,
-      events: dayEvents,
-    };
-  });
-});
 const upcomingEvents = computed(() =>
   events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 );
-const calendarEventDays = computed(() => calendarDays.value.filter((day) => !day.empty));
-const nextCalendarEvent = computed(() => upcomingEvents.value[0] || null);
 const timelineItems = computed(() => {
   const items = [
     ...events.value.map((event) => ({
       id: `event-${event.id}`,
+      kind: 'event',
+      raw: event,
       type: '日程',
       title: event.title,
       meta: `${event.time} · ${event.place}`,
       detail: event.note || (event.needsCompanion ? '需要有人陪同' : '站内提醒'),
       at: event.scheduledAt,
       icon: iconCalendar,
-      view: 'calendar',
+      view: 'today',
       accent: 'rose',
       fields: [
         { label: '时间', value: formatFullDateTime(event.scheduledAt) },
@@ -229,6 +169,7 @@ const timelineItems = computed(() => {
     })),
     ...bodyRecordItems.value.map((record) => ({
       id: `body-${record.id}`,
+      kind: 'body',
       type: '身体',
       title: '记录了一次身体状态',
       meta: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 体温 ${record.temperature}℃`,
@@ -249,13 +190,15 @@ const timelineItems = computed(() => {
     })),
     ...questions.value.map((question) => ({
       id: `question-${question.id}`,
+      kind: 'question',
+      raw: question,
       type: '问医生',
       title: question.text,
       meta: question.done ? '已问过医生' : question.important ? '重点问题' : '待复诊时确认',
       detail: question.answer || '还没有记录医生回复',
       at: question.createdAt,
       icon: iconDoctor,
-      view: 'doctor',
+      view: 'today',
       accent: 'blue',
       fields: [
         { label: '添加时间', value: formatFullDateTime(question.createdAt) },
@@ -263,49 +206,35 @@ const timelineItems = computed(() => {
         { label: '医生答复', value: question.answer || '还没有记录医生回复' },
       ],
     })),
-    ...helpTasks.value.map((task) => ({
-      id: `task-${task.id}`,
-      type: '帮忙',
-      title: task.title,
-      meta: `${task.status} · ${task.time}`,
-      detail: task.desc,
-      at: task.scheduledAt || task.createdAt,
-      icon: iconHelp,
-      view: 'help',
-      accent: 'amber',
-      fields: [
-        { label: '类型', value: task.type },
-        { label: '约定时间', value: task.time },
-        { label: '状态', value: task.status },
-        { label: '认领人', value: task.claimedBy || '还没人认领' },
-        { label: '说明', value: task.desc },
-      ],
-    })),
     ...messages.value.map((message) => ({
       id: `message-${message.id}`,
-      type: '留言',
+      kind: 'message',
+      raw: message,
+      type: '动态',
       title: message.text,
       meta: message.author,
-      detail: '一条陪伴留言',
+      detail: '一条朋友圈动态',
       at: message.createdAt,
-      icon: iconMessage,
-      view: 'messages',
+      icon: iconChat,
+      view: 'moments',
       accent: 'rose',
       fields: [
-        { label: '留言人', value: message.author },
+        { label: '来自', value: message.author },
         { label: '时间', value: formatFullDateTime(message.createdAt) },
         { label: '内容', value: message.text },
       ],
     })),
     ...notes.value.map((note) => ({
       id: `note-${note.id}`,
+      kind: 'note',
+      raw: note,
       type: '资料',
       title: note.title,
       meta: `${note.type} · ${note.visibility}`,
       detail: note.content || '资料文本已保存',
       at: note.createdAt,
       icon: iconFolder,
-      view: 'folder',
+      view: 'today',
       accent: 'sage',
       fields: [
         { label: '类型', value: note.type },
@@ -338,6 +267,70 @@ const bodyRecordPayload = computed(() => ({
   note: statusDraft.value.trim(),
   recordDate: new Date().toISOString().slice(0, 10),
 }));
+
+const trendMetrics = ['疼痛', '乏力', '睡眠', '心情', '食欲', '体温'];
+const trendMetricFields = {
+  疼痛: 'painScore',
+  乏力: 'fatigueScore',
+  睡眠: 'sleepScore',
+  心情: 'moodScore',
+  食欲: 'appetiteScore',
+  体温: 'temperature',
+};
+const trendPoints = computed(() => {
+  const byDay = new Map();
+  for (const record of bodyRecordItems.value) {
+    const key = record.recordDate || toDateKey(new Date(record.createdAt));
+    if (!byDay.has(key)) {
+      byDay.set(key, record);
+    }
+  }
+  const field = trendMetricFields[trendMetric.value];
+  const today = new Date();
+  const points = [];
+  for (let offset = trendDays.value - 1; offset >= 0; offset -= 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - offset);
+    const key = toDateKey(date);
+    const record = byDay.get(key);
+    const value = record ? Number(record[field]) : null;
+    points.push({
+      index: points.length,
+      key,
+      label: date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' }),
+      value: value === null || Number.isNaN(value) ? null : value,
+    });
+  }
+  return points;
+});
+const trendChart = computed(() => {
+  const width = 320;
+  const height = 120;
+  const padX = 12;
+  const padY = 14;
+  const isTemp = trendMetric.value === '体温';
+  const min = isTemp ? 34 : 0;
+  const max = isTemp ? 42 : 10;
+  const points = trendPoints.value;
+  const step = points.length > 1 ? (width - padX * 2) / (points.length - 1) : 0;
+  const dots = points
+    .filter((point) => point.value !== null)
+    .map((point) => ({
+      ...point,
+      x: padX + point.index * step,
+      y: height - padY - ((point.value - min) / (max - min)) * (height - padY * 2),
+    }));
+  return {
+    width,
+    height,
+    min,
+    max,
+    dots,
+    line: dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' '),
+    firstLabel: points[0]?.label || '',
+    lastLabel: points[points.length - 1]?.label || '',
+  };
+});
 
 onMounted(() => {
   const invite = new URLSearchParams(window.location.search).get('invite');
@@ -379,6 +372,8 @@ function isAfterToday(value) {
 function noticeTimelineItem(notice) {
   return {
     id: `notice-${notice.id}`,
+    kind: 'notice',
+    raw: notice,
     type: '注意',
     title: notice.content,
     meta: `${notice.important ? '重要 · ' : ''}${noticeRangeLabel(notice)}`,
@@ -417,11 +412,6 @@ function closeDetail() {
   detailItem.value = null;
 }
 
-function goFromDetail() {
-  const target = detailItem.value?.view;
-  detailItem.value = null;
-  if (target) go(target);
-}
 
 async function withLoading(action) {
   loading.value = true;
@@ -574,14 +564,15 @@ function logout() {
   spaces.value = [];
   events.value = [];
   questions.value = [];
-  helpTasks.value = [];
   messages.value = [];
   notes.value = [];
   notices.value = [];
   members.value = [];
+  currentRole.value = '';
   localStorage.removeItem('care-today-token');
   localStorage.removeItem('care-today-user');
   localStorage.removeItem('care-today-space-id');
+  localStorage.removeItem('care-today-role');
   showToast('已退出登录');
 }
 
@@ -613,7 +604,9 @@ async function selectSpace(spaceId) {
   const detail = await api.getSpace(spaceId);
   activeSpace.value = detail.space;
   members.value = (detail.members || []).map(mapMember);
-  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadHelpTasks(), loadMessages(), loadNotes(), loadNotices()]);
+  currentRole.value = detail.currentRole || '';
+  localStorage.setItem('care-today-role', currentRole.value);
+  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadMessages(), loadNotes(), loadNotices()]);
 }
 
 async function loadEvents() {
@@ -651,10 +644,6 @@ async function loadQuestions() {
   questions.value = (await api.listDoctorQuestions(activeSpaceId.value)).map(mapQuestion);
 }
 
-async function loadHelpTasks() {
-  helpTasks.value = (await api.listHelpTasks(activeSpaceId.value)).map(mapTask);
-}
-
 async function loadMessages() {
   messages.value = (await api.listMessages(activeSpaceId.value)).map(mapMessage);
 }
@@ -665,10 +654,6 @@ async function loadNotes() {
 
 async function loadNotices() {
   notices.value = (await api.listNotices(activeSpaceId.value)).map(mapNotice);
-}
-
-function openQuickNeed(need) {
-  go(need.view);
 }
 
 async function saveStatus() {
@@ -738,20 +723,30 @@ async function addQuestion() {
   });
 }
 
-async function addEvent() {
-  if (!eventDraft.value.title.trim() || !eventDraft.value.scheduledAt) {
-    showToast('先填写日程标题和时间');
-    return;
-  }
+async function openEventDialog() {
+  const values = await openFormDialog({
+    eyebrow: '加日程',
+    title: '添加一条日程',
+    message: '复诊、检查、取报告、用药提醒都可以记在这里。',
+    icon: iconCalendar,
+    fields: [
+      { name: 'title', label: '日程标题', value: '', required: true, placeholder: '例如：门诊复查' },
+      { name: 'scheduledAt', label: '时间', value: '', required: true, type: 'datetime-local' },
+      { name: 'location', label: '地点', value: '' },
+      { name: 'note', label: '备注', value: '', type: 'textarea', placeholder: '例如：带上报告和问题清单' },
+      { name: 'needsCompanion', label: '需要陪同', value: false, type: 'checkbox' },
+    ],
+    confirmText: '添加日程',
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.createEvent(activeSpaceId.value, {
-      title: eventDraft.value.title.trim(),
-      scheduledAt: new Date(eventDraft.value.scheduledAt).toISOString(),
-      location: eventDraft.value.location.trim() || undefined,
-      note: eventDraft.value.note.trim() || undefined,
-      needsCompanion: eventDraft.value.needsCompanion,
+      title: values.title.trim(),
+      scheduledAt: new Date(values.scheduledAt).toISOString(),
+      location: values.location?.trim() || undefined,
+      note: values.note?.trim() || undefined,
+      needsCompanion: Boolean(values.needsCompanion),
     });
-    eventDraft.value = { title: '', scheduledAt: '', location: '', note: '', needsCompanion: false };
     await loadEvents();
     showToast('日程已添加');
   });
@@ -842,101 +837,147 @@ async function deleteQuestion(question) {
   });
 }
 
-async function claimTask(task) {
+async function toggleQuestionAsked(question) {
   await withLoading(async () => {
-    await api.claimHelpTask(activeSpaceId.value, task.id);
-    await loadHelpTasks();
-    showToast('已认领这件事');
+    await api.updateDoctorQuestion(activeSpaceId.value, question.id, { asked: !question.done });
+    await loadQuestions();
   });
 }
 
-async function editTask(task) {
-  const values = await openFormDialog({
-    eyebrow: '帮忙任务',
-    title: '编辑任务',
-    icon: iconHelp,
-    fields: [
-      { name: 'title', label: '任务标题', value: task.title, required: true },
-      { name: 'description', label: '任务说明', value: task.desc || '', type: 'textarea' },
-    ],
-  });
-  if (!values) return;
-  await withLoading(async () => {
-    await api.updateHelpTask(activeSpaceId.value, task.id, {
-      title: values.title.trim(),
-      description: values.description ?? task.desc,
+const composerActions = [
+  { id: 'message', label: '说说此刻', desc: '发到朋友圈，家人朋友都能看到', icon: iconChat, patientOnly: true },
+  { id: 'event', label: '加日程', desc: '复诊、检查、用药提醒', icon: iconCalendar },
+  { id: 'body', label: '记身体', desc: '疼痛、乏力、睡眠、心情', icon: iconBody },
+  { id: 'notice', label: '记注意事项', desc: '医嘱和生活禁忌', icon: iconWarning },
+  { id: 'question', label: '问医生的问题', desc: '复诊前先记下来', icon: iconDoctor },
+  { id: 'note', label: '存一条资料', desc: '报告名称、用药、医嘱备注', icon: iconFolder },
+];
+
+const visibleComposerActions = computed(() =>
+  composerActions.filter((action) => !action.patientOnly || isPatient.value)
+);
+
+async function runComposerAction(action) {
+  composerOpen.value = false;
+  if (action.id === 'message') {
+    const values = await openFormDialog({
+      eyebrow: '说说此刻',
+      title: '现在想说点什么？',
+      message: '会发布到朋友圈，家人朋友都能看到。',
+      icon: iconMessage,
+      fields: [{ name: 'text', label: '内容', value: '', required: true, type: 'textarea', placeholder: '此刻的想法、状态或想说的话' }],
+      confirmText: '发布',
     });
-    await loadHelpTasks();
-    showToast('任务已更新');
-  });
-}
-
-async function deleteTask(task) {
-  const confirmed = await openConfirmDialog({
-    eyebrow: '删除任务',
-    title: `删除任务“${task.title}”？`,
-    message: '删除后成员将不能再认领这件事。',
-    icon: iconHelp,
-    confirmText: '删除',
-    danger: true,
-  });
-  if (!confirmed) return;
-  await withLoading(async () => {
-    await api.deleteHelpTask(activeSpaceId.value, task.id);
-    await loadHelpTasks();
-    showToast('任务已删除');
-  });
-}
-
-async function addTask() {
-  if (!taskDraft.value.trim()) {
-    showToast('先写一件可以被认领的小事');
+    if (!values) return;
+    messageDraft.value = values.text;
+    await addMessage();
+    go('moments');
     return;
   }
-  await withLoading(async () => {
-    await api.createHelpTask(activeSpaceId.value, {
-      title: taskDraft.value.trim(),
-      type: '其他',
-      description: '创建后可补充时间和说明。',
+  if (action.id === 'event') {
+    await openEventDialog();
+    return;
+  }
+  if (action.id === 'body') {
+    go('body');
+    return;
+  }
+  if (action.id === 'notice') {
+    go('notices');
+    return;
+  }
+  if (action.id === 'question') {
+    const values = await openFormDialog({
+      eyebrow: '问医生',
+      title: '添加一个想问医生的问题',
+      icon: iconDoctor,
+      fields: [{ name: 'text', label: '问题', value: '', required: true, type: 'textarea' }],
+      confirmText: '加入清单',
     });
-    taskDraft.value = '';
-    await loadHelpTasks();
-    showToast('已添加到帮忙墙');
-  });
+    if (!values) return;
+    questionDraft.value = values.text;
+    await addQuestion();
+    return;
+  }
+  if (action.id === 'note') {
+    const values = await openFormDialog({
+      eyebrow: '资料',
+      title: '存一条复诊资料',
+      icon: iconFolder,
+      fields: [
+        { name: 'title', label: '资料名称', value: '', required: true, placeholder: '报告名称、用药记录或医嘱备注' },
+        { name: 'content', label: '内容', value: '', type: 'textarea' },
+      ],
+      confirmText: '保存',
+    });
+    if (!values) return;
+    await withLoading(async () => {
+      await api.createNote(activeSpaceId.value, {
+        title: values.title.trim(),
+        type: '文本资料',
+        content: values.content?.trim() || '',
+        visibility: 'PATIENT_ADMIN',
+      });
+      await loadNotes();
+      showToast('资料已保存');
+    });
+  }
+}
+
+function editFromDetail() {
+  const item = detailItem.value;
+  if (!item?.kind || !item.raw) return;
+  detailItem.value = null;
+  if (item.kind === 'event') editEvent(item.raw);
+  else if (item.kind === 'message') editMessage(item.raw);
+  else if (item.kind === 'note') editNote(item.raw);
+  else if (item.kind === 'notice') editNotice(item.raw);
+  else if (item.kind === 'question') editQuestion(item.raw);
+}
+
+function deleteFromDetail() {
+  const item = detailItem.value;
+  if (!item?.kind || !item.raw) return;
+  detailItem.value = null;
+  if (item.kind === 'event') deleteEvent(item.raw);
+  else if (item.kind === 'message') deleteMessage(item.raw);
+  else if (item.kind === 'note') deleteNote(item.raw);
+  else if (item.kind === 'notice') deleteNotice(item.raw);
+  else if (item.kind === 'question') deleteQuestion(item.raw);
 }
 
 async function addMessage() {
   if (!messageDraft.value.trim()) {
-    showToast('先写一句留言');
+    showToast('先写点什么');
     return;
   }
   await withLoading(async () => {
     await api.createMessage(activeSpaceId.value, { text: messageDraft.value.trim() });
     messageDraft.value = '';
     await loadMessages();
-    showToast('留言已添加');
+    showToast('动态已发布');
   });
 }
 
 async function editMessage(message) {
   const values = await openFormDialog({
-    eyebrow: '留言',
-    title: '编辑留言',
+    eyebrow: '动态',
+    title: '编辑动态',
     icon: iconMessage,
-    fields: [{ name: 'text', label: '留言内容', value: message.text, required: true, type: 'textarea' }],
+    fields: [{ name: 'text', label: '内容', value: message.text, required: true, type: 'textarea' }],
   });
   if (!values) return;
   await withLoading(async () => {
     await api.updateMessage(activeSpaceId.value, message.id, { text: values.text.trim() });
     await loadMessages();
-    showToast('留言已更新');
+    showToast('动态已更新');
   });
 }
 
 async function deleteMessage(message) {
   const confirmed = await openConfirmDialog({
-    eyebrow: '删除留言',
-    title: '删除这条留言？',
+    eyebrow: '删除动态',
+    title: '删除这条动态？',
     message: message.text,
     icon: iconMessage,
     confirmText: '删除',
@@ -946,7 +987,7 @@ async function deleteMessage(message) {
   await withLoading(async () => {
     await api.deleteMessage(activeSpaceId.value, message.id);
     await loadMessages();
-    showToast('留言已删除');
+    showToast('动态已删除');
   });
 }
 
@@ -1236,21 +1277,6 @@ function mapQuestion(question) {
   };
 }
 
-function mapTask(task) {
-  const statusMap = { PENDING: '待认领', CLAIMED: '已认领', DONE: '已完成', CANCELLED: '已取消' };
-  return {
-    id: task.id,
-    title: task.title,
-    type: task.type,
-    time: task.scheduledAt ? new Date(task.scheduledAt).toLocaleString('zh-CN') : '待约定',
-    desc: task.description || '暂无说明',
-    status: statusMap[task.status] || task.status,
-    claimedBy: task.claimedBy || '',
-    scheduledAt: task.scheduledAt,
-    createdAt: task.createdAt,
-  };
-}
-
 function mapMessage(message) {
   return {
     id: message.id,
@@ -1374,7 +1400,7 @@ function mapMember(member) {
             <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
             仅自己和被授权成员可见
           </div>
-          <button v-if="isAuthed && hasSpace" class="small-btn" type="button" @click="go('members')">邀请家人</button>
+          <button v-if="isAuthed && hasSpace" class="small-btn" type="button" @click="membersOpen = true">成员 · 邀请家人</button>
           <button v-if="isAuthed" class="small-btn sage" type="button" @click="confirmLogout">{{ currentUser.nickname }} · 退出</button>
         </div>
       </section>
@@ -1435,22 +1461,6 @@ function mapMember(member) {
 
       <section v-else-if="view === 'today'" class="page-grid">
         <div class="main-stack">
-          <section class="quick-panel" aria-label="快捷发起">
-            <div class="quick-panel-head">
-              <div>
-                <span class="calendar-kicker">快捷发起</span>
-                <strong>今天想让家人朋友知道什么？</strong>
-              </div>
-              <span class="tag">点击后进入对应页面</span>
-            </div>
-            <div class="quick-actions">
-              <button v-for="need in quickNeeds" :key="need.label" class="need-button" type="button" @click="openQuickNeed(need)">
-                <span class="icon-wrap"><img :src="need.icon" alt="" aria-hidden="true" /></span>
-                <span><strong>{{ need.label }}</strong><small>{{ need.desc }}</small></span>
-              </button>
-            </div>
-          </section>
-
           <article class="card">
             <header class="card-header">
               <div class="card-title">
@@ -1465,7 +1475,7 @@ function mapMember(member) {
                   <img :src="iconWarning" alt="" aria-hidden="true" />
                   <span>注意：{{ notice.content }}</span>
                 </button>
-                <p v-if="!todayItems.length" class="empty-note">今天没有要做的事，好好休息。日历和帮忙墙里的安排到了当天会出现在这里。</p>
+                <p v-if="!todayItems.length" class="empty-note">今天没有要做的事，好好休息。用右下角「+」加的日程到了当天会出现在这里。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
                   <div>
@@ -1478,8 +1488,9 @@ function mapMember(member) {
               <div class="countdown">
                 <span>距离下次复诊</span>
                 <strong>{{ nextVisitCountdown === null ? '—' : nextVisitCountdown }}</strong>
-                <small>{{ nextVisitCountdown === null ? '还没有安排日程，到“日历”页添加复诊或检查。' : nextVisitCountdown === 0 ? '就是今天，把资料和问题清单带上。' : '把资料和问题提前整理好，不用临时回忆。' }}</small>
-                <button class="small-btn" type="button" @click="go('folder')">整理复诊资料</button>
+                <small>{{ nextVisitCountdown === null ? '还没有安排日程，点右下角「+」添加复诊或检查。' : nextVisitCountdown === 0 ? '就是今天，把资料和问题清单带上。' : '把资料和问题提前整理好，不用临时回忆。' }}</small>
+                <button class="small-btn" type="button" @click="questionsOpen = true">问题清单</button>
+                <button class="small-btn" type="button" @click="folderOpen = true">复诊资料</button>
               </div>
             </div>
           </article>
@@ -1545,16 +1556,16 @@ function mapMember(member) {
               <div>
                 <span class="calendar-kicker">过去和未来都在这里</span>
                 <strong>{{ activeSpace?.patientNickname || currentUser.nickname }} 的照护动态</strong>
-                <p>日程、身体记录、问题清单、注意事项、帮忙任务、留言和资料都会汇总到这条时间线上。往上看接下来的计划，往下看已经发生的事，点击任何一条可以查看详情。</p>
+                <p>日程、身体记录、问题清单、注意事项、朋友圈动态和资料都会汇总到这条时间线上。往上看接下来的计划，往下看已经发生的事，点击任何一条可以查看详情。</p>
               </div>
               <div class="timeline-jump">
-                <button class="small-btn sage" type="button" @click="go('calendar')">加日程</button>
+                <button class="small-btn sage" type="button" @click="openEventDialog">加日程</button>
                 <button class="small-btn" type="button" @click="go('body')">记身体</button>
                 <button class="small-btn" type="button" @click="go('notices')">记注意</button>
               </div>
             </div>
 
-            <p v-if="!timelineItems.length" class="empty-note">还没有动态。先添加一条日程、身体记录、问题或留言，时间线会自动汇总。</p>
+            <p v-if="!timelineItems.length" class="empty-note">还没有动态。先添加一条日程、身体记录、问题或朋友圈动态，时间线会自动汇总。</p>
             <div v-else class="timeline-list">
               <button
                 v-for="item in timelineFutureItems"
@@ -1609,74 +1620,32 @@ function mapMember(member) {
         </article>
       </section>
 
-      <section v-else-if="view === 'calendar'" class="single-stack">
+      <section v-else-if="view === 'moments'" class="single-stack">
         <article class="card">
           <header class="card-header">
             <div class="card-title">
-              <img class="icon" :src="iconCalendar" alt="" aria-hidden="true" />
-              <h2>日历与安排</h2>
+              <img class="icon" :src="iconChat" alt="" aria-hidden="true" />
+              <h2>朋友圈</h2>
             </div>
-            <span class="tag">站内提醒</span>
+            <span class="tag">{{ isPatient ? '想到什么就记下来' : '只有患者本人可以发布' }}</span>
           </header>
           <div class="card-body">
-            <div class="calendar-board">
-              <div class="calendar-hero">
-                <div>
-                  <span class="calendar-kicker">本月安排</span>
-                  <strong>{{ calendarMonthLabel }}</strong>
-                  <p>{{ nextCalendarEvent ? `下一项：${nextCalendarEvent.date} ${nextCalendarEvent.time} · ${nextCalendarEvent.title}` : '暂无安排，下方添加后会出现在这里。' }}</p>
-                </div>
-                <div class="calendar-count">
-                  <strong>{{ events.length }}</strong>
-                  <span>个安排</span>
-                </div>
-              </div>
-
-              <div class="date-strip" aria-label="月内日期">
-                <div
-                  v-for="day in calendarEventDays"
-                  :key="day.key"
-                  class="date-chip"
-                  :class="{ today: day.isToday, filled: day.events?.length }"
-                >
-                  <span>{{ weekdayLabels[(new Date(day.key).getDay() + 6) % 7] }}</span>
-                  <strong>{{ day.day }}</strong>
-                  <small v-if="day.events.length">{{ day.events.length }}项</small>
-                </div>
-              </div>
-
-              <div class="agenda-panel calm-timeline">
-                <p v-if="!events.length" class="empty-note">还没有日程。下方添加后会写入后端数据库。</p>
-                <div v-for="event in upcomingEvents" :key="event.id" class="agenda-row">
-                  <div class="agenda-date">
-                    <strong>{{ event.day }}</strong>
-                    <span>{{ event.date }}</span>
-                  </div>
-                  <div class="agenda-content">
-                    <div class="agenda-title">
-                      <strong>{{ event.title }}</strong>
-                      <span class="tag">{{ event.tag }}</span>
-                    </div>
-                    <span>{{ event.time }} · {{ event.place }}</span>
-                    <p v-if="event.note">{{ event.note }}</p>
-                    <div class="row-actions">
-                      <button class="small-btn" type="button" @click="editEvent(event)">编辑</button>
-                      <button class="small-btn danger" type="button" @click="deleteEvent(event)">删除</button>
-                    </div>
-                  </div>
-                </div>
+            <div v-if="isPatient" class="moments-composer">
+              <textarea v-model="messageDraft" rows="3" placeholder="此刻想说点什么？想法、状态、想让家人知道的事…"></textarea>
+              <div class="form-row">
+                <button class="small-btn sage" type="button" :disabled="loading" @click="addMessage">发布</button>
               </div>
             </div>
-            <div class="event-form">
-              <input v-model="eventDraft.title" type="text" placeholder="日程标题，例如：门诊复查" />
-              <input v-model="eventDraft.scheduledAt" type="datetime-local" />
-              <input v-model="eventDraft.location" type="text" placeholder="地点" />
-              <input v-model="eventDraft.note" type="text" placeholder="备注，例如：带上报告和问题清单" />
-              <label class="inline-check">
-                <input v-model="eventDraft.needsCompanion" type="checkbox" />
-                <span>需要陪同</span>
-              </label>
-              <button class="small-btn sage" type="button" @click="addEvent">添加日程</button>
+            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有动态。写下此刻的想法和状态，家人朋友都能看到。' : '还没有动态。' }}</p>
+            <div v-else class="message-list moments-feed">
+              <div v-for="message in messages" :key="message.id" class="message">
+                <p>{{ message.text }}</p>
+                <span>{{ message.author }} · {{ message.time }}</span>
+                <div v-if="isPatient" class="row-actions">
+                  <button class="small-btn" type="button" @click="editMessage(message)">编辑</button>
+                  <button class="small-btn danger" type="button" @click="deleteMessage(message)">删除</button>
+                </div>
+              </div>
             </div>
           </div>
         </article>
@@ -1689,7 +1658,7 @@ function mapMember(member) {
               <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
               <h2>身体记录</h2>
             </div>
-            <span class="tag">最近 7 天用于复诊回顾</span>
+            <span class="tag">每天一条，复诊前回顾</span>
           </header>
           <div class="card-body">
             <div class="status-grid large">
@@ -1711,38 +1680,49 @@ function mapMember(member) {
             <p v-if="statusNote" class="saved-note">最近记录：{{ statusNote }}</p>
           </div>
         </article>
-        <article class="card urgent">
-          <div class="card-body boundary">{{ disclaimer }}</div>
-        </article>
-      </section>
 
-      <section v-else-if="view === 'doctor'" class="single-stack">
         <article class="card">
           <header class="card-header">
             <div class="card-title">
-              <img class="icon" :src="iconDoctor" alt="" aria-hidden="true" />
-              <h2>问医生清单</h2>
+              <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
+              <h2>身体变化趋势</h2>
             </div>
-            <span class="tag">复诊前勾选</span>
+            <div class="trend-period">
+              <button class="small-btn" :class="{ sage: trendDays === 7 }" type="button" @click="trendDays = 7">近 7 天</button>
+              <button class="small-btn" :class="{ sage: trendDays === 30 }" type="button" @click="trendDays = 30">近 30 天</button>
+            </div>
           </header>
-          <div class="card-body checklist">
-            <label v-for="question in questions" :key="question.id" class="check-row">
-              <input v-model="question.done" type="checkbox" />
-              <span>
-                <strong>{{ question.text }}</strong>
-                <small v-if="question.answer">医生答复：{{ question.answer }}</small>
-              </span>
-              <button class="mark-btn" :class="{ active: question.important }" type="button" @click.prevent="toggleImportant(question)">
-                重要
+          <div class="card-body">
+            <div class="trend-metrics">
+              <button
+                v-for="metric in trendMetrics"
+                :key="metric"
+                class="trend-chip"
+                :class="{ active: trendMetric === metric }"
+                type="button"
+                @click="trendMetric = metric"
+              >
+                {{ metric }}
               </button>
-              <button class="mark-btn" type="button" @click.prevent="editQuestion(question)">编辑</button>
-              <button class="mark-btn danger" type="button" @click.prevent="deleteQuestion(question)">删除</button>
-            </label>
-            <div class="form-row">
-              <input v-model="questionDraft" type="text" placeholder="添加一个复诊时想问医生的问题" />
-              <button class="small-btn" type="button" @click="addQuestion">添加</button>
+            </div>
+            <p v-if="trendChart.dots.length < 2" class="empty-note">记录还不够多。连续记录两天以上，这里会画出{{ trendMetric }}的变化曲线。</p>
+            <div v-else class="trend-chart">
+              <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" preserveAspectRatio="none" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
+                <line :x1="12" :y1="trendChart.height - 14" :x2="trendChart.width - 12" :y2="trendChart.height - 14" class="trend-axis" />
+                <polyline :points="trendChart.line" class="trend-line" />
+                <circle v-for="dot in trendChart.dots" :key="dot.key" :cx="dot.x" :cy="dot.y" r="3" class="trend-dot" />
+              </svg>
+              <div class="trend-legend">
+                <span>{{ trendChart.firstLabel }}</span>
+                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : '分' }}）· 共 {{ trendChart.dots.length }} 天有记录</span>
+                <span>{{ trendChart.lastLabel }}</span>
+              </div>
             </div>
           </div>
+        </article>
+
+        <article class="card urgent">
+          <div class="card-body boundary">{{ disclaimer }}</div>
         </article>
       </section>
 
@@ -1812,162 +1792,14 @@ function mapMember(member) {
         </article>
       </section>
 
-      <section v-else-if="view === 'help'" class="single-stack">
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconHelp" alt="" aria-hidden="true" />
-              <h2>朋友帮忙墙</h2>
-            </div>
-            <span class="tag">家庭协作</span>
-          </header>
-          <div class="card-body">
-            <div class="help-grid">
-              <div v-for="task in helpTasks" :key="task.id" class="help-card">
-                <header>
-                  <div>
-                    <strong>{{ task.title }}</strong>
-                    <span>{{ task.type }} · {{ task.time }}</span>
-                  </div>
-                  <span class="tag">{{ task.status }}</span>
-                </header>
-                <p>{{ task.desc }}</p>
-                <footer>
-                  <span>{{ task.claimedBy ? `认领人：${task.claimedBy}` : '还没人认领' }}</span>
-                  <div class="row-actions">
-                    <button v-if="task.status === '待认领'" class="claim-btn" type="button" @click="claimTask(task)">认领</button>
-                    <button class="small-btn" type="button" @click="editTask(task)">编辑</button>
-                    <button class="small-btn danger" type="button" @click="deleteTask(task)">删除</button>
-                  </div>
-                </footer>
-              </div>
-            </div>
-            <div class="form-row">
-              <input v-model="taskDraft" type="text" placeholder="添加一件家人朋友可以帮忙的小事" />
-              <button class="small-btn" type="button" @click="addTask">添加任务</button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section v-else-if="view === 'messages'" class="single-stack">
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconMessage" alt="" aria-hidden="true" />
-              <h2>温柔留言</h2>
-            </div>
-          </header>
-          <div class="card-body">
-            <div class="message-list">
-              <div v-for="message in messages" :key="message.id" class="message">
-                <p>{{ message.text }}</p>
-                <span>{{ message.author }} · {{ message.time }}</span>
-                <div class="row-actions">
-                  <button class="small-btn" type="button" @click="editMessage(message)">编辑</button>
-                  <button class="small-btn danger" type="button" @click="deleteMessage(message)">删除</button>
-                </div>
-              </div>
-            </div>
-            <div class="form-row">
-              <input v-model="messageDraft" type="text" placeholder="写一句不催促、不讲道理的陪伴话" />
-              <button class="small-btn" type="button" @click="addMessage">添加</button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section v-else-if="view === 'folder'" class="single-stack">
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconFolder" alt="" aria-hidden="true" />
-              <h2>复诊资料夹</h2>
-            </div>
-            <span class="tag">第一版仅文本记录</span>
-          </header>
-          <div class="card-body file-list">
-            <div v-for="note in notes" :key="note.id" class="file-row">
-              <span class="file-icon"><img :src="iconFolder" alt="" aria-hidden="true" /></span>
-              <div>
-                <strong>{{ note.title }}</strong>
-                <span>{{ note.type }} · {{ note.desc }} · {{ note.visibility }}</span>
-              </div>
-              <div class="row-actions">
-                <button class="small-btn sage" type="button" @click="editNote(note)">编辑</button>
-                <button class="small-btn danger" type="button" @click="deleteNote(note)">删除</button>
-              </div>
-            </div>
-            <div class="form-row">
-              <input v-model="noteDraft" type="text" placeholder="新增报告名称、用药记录或医嘱备注" />
-              <button class="small-btn" type="button" @click="addNote">新增</button>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section v-else-if="view === 'members'" class="single-stack">
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconLock" alt="" aria-hidden="true" />
-              <h2>成员与权限</h2>
-            </div>
-            <span class="tag">默认最小可见</span>
-          </header>
-          <div class="card-body">
-            <div class="invite-guide">
-              <div>
-                <strong>邀请家人朋友查看这个空间</strong>
-                <span>输入对方昵称或备注后点击“生成邀请链接”，把链接发给对方。对方登录或注册后才会正式出现在成员列表里。</span>
-              </div>
-              <span class="tag">链接 7 天内有效</span>
-            </div>
-            <div class="member-list">
-              <div v-for="member in members" :key="member.id" class="member-row">
-                <div>
-                  <strong>{{ member.name }}</strong>
-                  <span>{{ member.role }} · {{ member.access }}</span>
-                </div>
-                <div class="row-actions">
-                  <span class="tag">{{ member.status }}</span>
-                  <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
-                </div>
-              </div>
-            </div>
-            <div class="form-row">
-              <input v-model="invitePhone" type="text" placeholder="输入手机号、昵称或邀请备注" />
-              <button class="small-btn" type="button" @click="inviteMember">生成邀请链接</button>
-              <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
-              <button class="small-btn danger" type="button" @click="deleteAccount">删除账号</button>
-            </div>
-          </div>
-        </article>
-
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconPrivacy" alt="" aria-hidden="true" />
-              <h2>隐私说明</h2>
-            </div>
-          </header>
-          <div class="card-body privacy-copy">
-            <p>创建陪伴空间时会记录昵称、成员关系、日程、身体记录、问题清单、任务、留言和资料文本。这些信息用于就诊整理和家庭协作。</p>
-            <p>新成员加入后需要管理员授权；敏感资料默认仅患者和管理员可见。成员退出后，不再能访问空间数据。</p>
-            <label class="consent-row">
-              <input v-model="privacyAccepted" type="checkbox" />
-              <span>我已了解这些信息的用途、可见范围和退出方式。</span>
-            </label>
-          </div>
-        </article>
-      </section>
-
       <div class="mobile-nav" aria-label="移动端导航">
         <button v-for="item in navItems" :key="item.id" :class="{ active: item.id === view }" type="button" @click="go(item.id)">
           <img class="icon" :src="item.icon" alt="" aria-hidden="true" />
           <span>{{ item.label }}</span>
         </button>
       </div>
+
+      <button v-if="isAuthed && hasSpace" class="fab" type="button" aria-label="记录点什么" @click="composerOpen = true">＋</button>
     </main>
 
     <div v-if="toastText" class="toast" role="status" aria-live="polite">{{ toastText }}</div>
@@ -1987,8 +1819,134 @@ function mapMember(member) {
           </dl>
         </div>
         <div class="confirm-actions">
-          <button class="small-btn" type="button" @click="goFromDetail">去对应页面处理</button>
+          <template v-if="detailItem.kind && detailItem.raw">
+            <button class="small-btn" type="button" @click="editFromDetail">编辑</button>
+            <button class="small-btn danger" type="button" @click="deleteFromDetail">删除</button>
+          </template>
           <button class="small-btn sage" type="button" @click="closeDetail">知道了</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="composerOpen" class="modal-backdrop" role="presentation" @click.self="composerOpen = false">
+      <section class="confirm-dialog composer-sheet" role="dialog" aria-modal="true" aria-labelledby="composer-title">
+        <div class="confirm-icon">
+          <img :src="iconToday" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">记录点什么</p>
+          <h2 id="composer-title">现在想记下哪件事？</h2>
+          <div class="composer-actions">
+            <button v-for="action in visibleComposerActions" :key="action.id" class="need-button" type="button" @click="runComposerAction(action)">
+              <span class="icon-wrap"><img :src="action.icon" alt="" aria-hidden="true" /></span>
+              <span><strong>{{ action.label }}</strong><small>{{ action.desc }}</small></span>
+            </button>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="composerOpen = false">取消</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="questionsOpen" class="modal-backdrop" role="presentation" @click.self="questionsOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="questions-title">
+        <div class="confirm-icon accent-blue">
+          <img :src="iconDoctor" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">复诊前勾选</p>
+          <h2 id="questions-title">问医生清单</h2>
+          <p v-if="!questions.length">还没有问题。把担心的事先记下来，复诊时不怕忘。</p>
+          <div class="checklist panel-list">
+            <label v-for="question in questions" :key="question.id" class="check-row">
+              <input :checked="question.done" type="checkbox" @change="toggleQuestionAsked(question)" />
+              <span>
+                <strong>{{ question.text }}</strong>
+                <small v-if="question.answer">医生答复：{{ question.answer }}</small>
+              </span>
+              <button class="mark-btn" :class="{ active: question.important }" type="button" @click.prevent="toggleImportant(question)">重要</button>
+              <button class="mark-btn" type="button" @click.prevent="editQuestion(question)">编辑</button>
+              <button class="mark-btn danger" type="button" @click.prevent="deleteQuestion(question)">删除</button>
+            </label>
+          </div>
+          <div class="form-row">
+            <input v-model="questionDraft" type="text" placeholder="添加一个想问医生的问题" />
+            <button class="small-btn" type="button" @click="addQuestion">添加</button>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn sage" type="button" @click="questionsOpen = false">关闭</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="folderOpen" class="modal-backdrop" role="presentation" @click.self="folderOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="folder-title">
+        <div class="confirm-icon accent-sage">
+          <img :src="iconFolder" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">文本资料</p>
+          <h2 id="folder-title">复诊资料夹</h2>
+          <p v-if="!notes.length">还没有资料。报告名称、用药记录和医嘱备注都可以存在这里。</p>
+          <div class="file-list panel-list">
+            <div v-for="note in notes" :key="note.id" class="file-row">
+              <span class="file-icon"><img :src="iconFolder" alt="" aria-hidden="true" /></span>
+              <div>
+                <strong>{{ note.title }}</strong>
+                <span>{{ note.type }} · {{ note.desc }} · {{ note.visibility }}</span>
+              </div>
+              <div class="row-actions">
+                <button class="small-btn sage" type="button" @click="editNote(note)">编辑</button>
+                <button class="small-btn danger" type="button" @click="deleteNote(note)">删除</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <input v-model="noteDraft" type="text" placeholder="新增报告名称、用药记录或医嘱备注" />
+            <button class="small-btn" type="button" @click="addNote">新增</button>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn sage" type="button" @click="folderOpen = false">关闭</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="membersOpen" class="modal-backdrop" role="presentation" @click.self="membersOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="members-title">
+        <div class="confirm-icon">
+          <img :src="iconLock" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">默认最小可见</p>
+          <h2 id="members-title">成员与权限</h2>
+          <p>输入对方昵称或备注后生成邀请链接发给对方，对方登录或注册后会出现在成员列表里。链接 7 天内有效。</p>
+          <div class="member-list panel-list">
+            <div v-for="member in members" :key="member.id" class="member-row">
+              <div>
+                <strong>{{ member.name }}</strong>
+                <span>{{ member.role }} · {{ member.access }}</span>
+              </div>
+              <div class="row-actions">
+                <span class="tag">{{ member.status }}</span>
+                <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-row">
+            <input v-model="invitePhone" type="text" placeholder="输入手机号、昵称或邀请备注" />
+            <button class="small-btn" type="button" @click="inviteMember">生成邀请链接</button>
+          </div>
+          <div class="form-row">
+            <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
+            <button class="small-btn danger" type="button" @click="deleteAccount">删除账号</button>
+          </div>
+          <p class="privacy-footnote">这里会记录昵称、成员关系、日程、身体记录、问题清单、动态和资料文本，用于就诊整理和家庭协作。敏感资料默认仅患者和管理员可见，成员退出后不再能访问空间数据。</p>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn sage" type="button" @click="membersOpen = false">关闭</button>
         </div>
       </section>
     </div>
@@ -2008,13 +1966,20 @@ function mapMember(member) {
                 v-if="field.type === 'textarea'"
                 v-model="dialog.values[field.name]"
                 :readonly="field.readonly"
+                :placeholder="field.placeholder || ''"
                 rows="4"
               ></textarea>
+              <input
+                v-else-if="field.type === 'checkbox'"
+                v-model="dialog.values[field.name]"
+                type="checkbox"
+              />
               <input
                 v-else
                 v-model="dialog.values[field.name]"
                 :readonly="field.readonly"
-                type="text"
+                :placeholder="field.placeholder || ''"
+                :type="field.type || 'text'"
               />
             </label>
           </div>

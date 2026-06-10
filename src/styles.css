@@ -1416,6 +1416,42 @@ textarea {
   font-size: 12px;
 }
 
+.moments-composer {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 13px 14px;
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.moments-composer textarea {
+  width: 100%;
+  padding: 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+  resize: vertical;
+  line-height: 1.6;
+  font-size: 14px;
+}
+
+.moments-composer textarea:focus {
+  border-color: rgba(199, 104, 114, 0.5);
+  box-shadow: 0 0 0 3px rgba(199, 104, 114, 0.12);
+}
+
+.moments-composer .form-row {
+  justify-content: flex-end;
+}
+
+.moments-feed .message p {
+  overflow-wrap: anywhere;
+}
+
 .check-row {
   display: grid;
   grid-template-columns: auto 1fr auto auto auto;
@@ -1660,6 +1696,139 @@ textarea {
   }
 }
 
+.fab {
+  position: fixed;
+  right: 26px;
+  bottom: 26px;
+  z-index: 15;
+  width: 56px;
+  height: 56px;
+  color: #fff;
+  background: linear-gradient(145deg, #c76872, #b85a64);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: var(--shadow-float);
+  font-size: 28px;
+  line-height: 1;
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.fab:hover {
+  transform: translateY(-2px) scale(1.04);
+}
+
+.composer-sheet .composer-actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.panel-dialog {
+  width: min(600px, 100%);
+}
+
+.panel-list {
+  display: grid;
+  gap: 10px;
+  max-height: 320px;
+  margin-top: 12px;
+  overflow-y: auto;
+}
+
+.panel-dialog .form-row {
+  margin-top: 12px;
+}
+
+.privacy-footnote {
+  margin-top: 12px !important;
+  font-size: 12px !important;
+  line-height: 1.7 !important;
+}
+
+.trend-period {
+  display: flex;
+  gap: 8px;
+}
+
+.trend-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.trend-chip {
+  padding: 6px 14px;
+  color: var(--muted);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+}
+
+.trend-chip.active {
+  color: #fff;
+  background: var(--sage);
+  border-color: var(--sage);
+}
+
+.trend-chart {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.trend-chart svg {
+  width: 100%;
+  height: 150px;
+  display: block;
+}
+
+.trend-axis {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.trend-dot {
+  fill: #fff;
+  stroke: var(--rose);
+  stroke-width: 2;
+}
+
+.trend-legend {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.trend-legend span:nth-child(2) {
+  text-align: center;
+}
+
+.dialog-field input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  accent-color: var(--sage);
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1730,6 +1899,13 @@ textarea {
   .mobile-nav .icon {
     width: 18px;
     height: 18px;
+  }
+
+  .fab {
+    right: 16px;
+    bottom: 84px;
+    width: 52px;
+    height: 52px;
   }
 
   .toast {

@@ -58,9 +58,13 @@ public class CareService {
     ensureActiveMember(spaceId, currentUserId);
     CareSpace space = careRepository.findSpace(spaceId)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Care space not found"));
+    String currentRole = careRepository.findMembership(spaceId, currentUserId)
+        .map(member -> member.role().name())
+        .orElse("");
     return Map.of(
         "space", space,
-        "members", careRepository.listMembers(spaceId));
+        "members", careRepository.listMembers(spaceId),
+        "currentRole", currentRole);
   }
 
   public SpaceMember inviteMember(UUID currentUserId, UUID spaceId, InviteMemberRequest request) {
@@ -268,6 +272,9 @@ public class CareService {
 
   public SupportMessage createMessage(UUID currentUserId, UUID spaceId, CreateMessageRequest request) {
     ensureActiveMember(spaceId, currentUserId);
+    if (!careRepository.isAdmin(spaceId, currentUserId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者本人可以发布动态");
+    }
     SupportMessage message = careRepository.createMessage(spaceId, currentUserId, request.text());
     careRepository.audit(spaceId, currentUserId, "message.create", "message", message.id());
     return message;
