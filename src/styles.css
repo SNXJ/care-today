@@ -1772,6 +1772,7 @@ textarea {
   color: #fff;
   background: var(--sage);
   border-color: var(--sage);
+  box-shadow: 0 6px 14px rgba(120, 146, 124, 0.28);
 }
 
 .trend-chart {
@@ -1794,10 +1795,15 @@ textarea {
   stroke-width: 1;
 }
 
+.trend-area {
+  fill: url(#trend-fill);
+  stroke: none;
+}
+
 .trend-line {
   fill: none;
   stroke: var(--sage);
-  stroke-width: 2;
+  stroke-width: 2.2;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
@@ -1916,6 +1922,98 @@ textarea {
 .invite-cta .member-row,
 .member-row {
   align-items: center;
+}
+
+/* ---- v0.5 visual polish, following design-style-guide ---- */
+.card {
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+.topbar h1 {
+  letter-spacing: -0.01em;
+}
+
+.eyebrow {
+  letter-spacing: 0.08em;
+  text-transform: none;
+}
+
+.fab {
+  background: radial-gradient(circle at 32% 28%, #d2818a, #c76872 60%, #b85a64);
+  box-shadow: 0 14px 30px rgba(199, 104, 114, 0.34);
+  font-weight: 300;
+}
+
+.fab:hover {
+  box-shadow: 0 18px 38px rgba(199, 104, 114, 0.42);
+}
+
+.need-button {
+  border-radius: 12px;
+}
+
+.need-button .icon-wrap {
+  background: linear-gradient(150deg, var(--rose-soft), #fbe7ea);
+}
+
+.composer-sheet .need-button:nth-child(odd) .icon-wrap {
+  background: linear-gradient(150deg, var(--sage-soft), #eef4ec);
+}
+
+.notice-strip {
+  border-radius: 10px;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.notice-strip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(215, 154, 75, 0.18);
+}
+
+.schedule-row {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.schedule-row:hover {
+  border-color: rgba(199, 104, 114, 0.28);
+  box-shadow: 0 8px 18px rgba(82, 63, 47, 0.06);
+}
+
+.countdown {
+  background:
+    radial-gradient(120% 120% at 100% 0%, rgba(255, 255, 255, 0.16), transparent 55%),
+    linear-gradient(150deg, #7d967f, #c76872);
+}
+
+.timeline-divider span {
+  box-shadow: 0 6px 14px rgba(199, 104, 114, 0.16);
+}
+
+.symptom-row {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.symptom-row:hover {
+  border-color: rgba(215, 154, 75, 0.3);
+  box-shadow: 0 8px 16px rgba(82, 63, 47, 0.05);
+}
+
+.invite-cta {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.invite-cta:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-float);
+}
+
+.message {
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.message:hover {
+  border-color: rgba(199, 104, 114, 0.22);
+  box-shadow: 0 8px 16px rgba(82, 63, 47, 0.05);
 }
 
 @media (max-width: 1080px) {

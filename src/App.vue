@@ -71,7 +71,6 @@ const trendMetric = ref('疼痛');
 const trendDays = ref(7);
 const bodyFormOpen = ref(false);
 const symptomFormOpen = ref(false);
-const weightDraft = ref('');
 const symptomPresets = ['大便', '腹泻', '发烧', '乏力', '疼痛', '手脚发麻'];
 const symptomDraft = ref({ tag: '', customTag: '', happenedAt: '', note: '' });
 const symptoms = ref([]);
@@ -91,8 +90,14 @@ const bodyRecords = ref([
   { label: '睡眠', value: 5 },
   { label: '心情', value: 4 },
   { label: '食欲', value: 5 },
-  { label: '体温', value: 37 },
 ]);
+const scoreFieldByLabel = {
+  疼痛: 'painScore',
+  乏力: 'fatigueScore',
+  睡眠: 'sleepScore',
+  心情: 'moodScore',
+  食欲: 'appetiteScore',
+};
 
 const questions = ref([]);
 const messages = ref([]);
@@ -290,8 +295,6 @@ const bodyRecordPayload = computed(() => ({
   sleepScore: Number(bodyRecords.value.find((item) => item.label === '睡眠')?.value || 0),
   moodScore: Number(bodyRecords.value.find((item) => item.label === '心情')?.value || 0),
   appetiteScore: Number(bodyRecords.value.find((item) => item.label === '食欲')?.value || 0),
-  temperature: Number(bodyRecords.value.find((item) => item.label === '体温')?.value || 37),
-  weight: weightDraft.value === '' || weightDraft.value === null ? undefined : Number(weightDraft.value),
   note: statusDraft.value.trim(),
   recordDate: new Date().toISOString().slice(0, 10),
 }));
@@ -307,22 +310,24 @@ const trendMetricFields = {
   体重: 'weight',
 };
 const trendPoints = computed(() => {
+  const field = trendMetricFields[trendMetric.value];
+  // bodyRecordItems is sorted newest-first; keep the latest non-null value per day for this metric
   const byDay = new Map();
   for (const record of bodyRecordItems.value) {
+    const raw = record[field];
+    if (raw === null || raw === undefined || raw === '') continue;
     const key = record.recordDate || toDateKey(new Date(record.createdAt));
     if (!byDay.has(key)) {
-      byDay.set(key, record);
+      byDay.set(key, Number(raw));
     }
   }
-  const field = trendMetricFields[trendMetric.value];
   const today = new Date();
   const points = [];
   for (let offset = trendDays.value - 1; offset >= 0; offset -= 1) {
     const date = new Date(today);
     date.setDate(today.getDate() - offset);
     const key = toDateKey(date);
-    const record = byDay.get(key);
-    const value = record ? Number(record[field]) : null;
+    const value = byDay.has(key) ? byDay.get(key) : null;
     points.push({
       index: points.length,
       key,
@@ -356,6 +361,10 @@ const trendChart = computed(() => {
       x: padX + point.index * step,
       y: height - padY - ((point.value - min) / (max - min)) * (height - padY * 2),
     }));
+  const baseY = height - padY;
+  const area = dots.length
+    ? `${dots[0].x.toFixed(1)},${baseY} ` + dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' ') + ` ${dots[dots.length - 1].x.toFixed(1)},${baseY}`
+    : '';
   return {
     width,
     height,
@@ -363,6 +372,7 @@ const trendChart = computed(() => {
     max,
     dots,
     line: dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' '),
+    area,
     firstLabel: points[0]?.label || '',
     lastLabel: points[points.length - 1]?.label || '',
   };
@@ -647,31 +657,24 @@ async function loadEvents() {
   events.value = (await api.listEvents(activeSpaceId.value)).map(mapEvent);
 }
 
-async function loadBodyRecords() {
-  const records = await api.listBodyRecords(activeSpaceId.value);
-  bodyRecordItems.value = records;
-  const latest = records[0];
-  if (latest) {
-    bodyRecords.value = [
-      { label: '疼痛', value: latest.painScore },
-      { label: '乏力', value: latest.fatigueScore },
-      { label: '睡眠', value: latest.sleepScore },
-      { label: '心情', value: latest.moodScore },
-      { label: '食欲', value: latest.appetiteScore },
-      { label: '体温', value: latest.temperature },
-    ];
-    statusNote.value = latest.note || '';
-  } else {
-    bodyRecords.value = [
-      { label: '疼痛', value: 3 },
-      { label: '乏力', value: 6 },
-      { label: '睡眠', value: 5 },
-      { label: '心情', value: 4 },
-      { label: '食欲', value: 5 },
-      { label: '体温', value: 37 },
-    ];
-    statusNote.value = '';
+const fallbackScores = { 疼痛: 3, 乏力: 6, 睡眠: 5, 心情: 4, 食欲: 5 };
+
+function latestValue(field) {
+  for (const record of bodyRecordItems.value) {
+    const raw = record[field];
+    if (raw !== null && raw !== undefined && raw !== '') return raw;
   }
+  return null;
+}
+
+async function loadBodyRecords() {
+  bodyRecordItems.value = await api.listBodyRecords(activeSpaceId.value);
+  bodyRecords.value = Object.entries(scoreFieldByLabel).map(([label, field]) => ({
+    label,
+    value: latestValue(field) ?? fallbackScores[label],
+  }));
+  const latestNote = bodyRecordItems.value.find((record) => record.note);
+  statusNote.value = latestNote?.note || '';
 }
 
 async function loadQuestions() {
@@ -695,15 +698,12 @@ async function loadSymptoms() {
 }
 
 function openBodyForm() {
-  weightDraft.value = bodyRecordItems.value[0]?.weight ?? '';
   bodyFormOpen.value = true;
 }
 
+const todayDateKey = () => new Date().toISOString().slice(0, 10);
+
 async function saveStatus() {
-  if (!statusDraft.value.trim()) {
-    showToast('补一句今天的身体感受再保存');
-    return;
-  }
   await withLoading(async () => {
     const result = await api.createBodyRecord(activeSpaceId.value, bodyRecordPayload.value);
     statusNote.value = result.record.note || '';
@@ -711,6 +711,64 @@ async function saveStatus() {
     bodyFormOpen.value = false;
     await loadBodyRecords();
     showToast('今天的身体状态已记录');
+  });
+}
+
+async function openTempDialog() {
+  const values = await openFormDialog({
+    eyebrow: '体温',
+    title: '记一次体温',
+    message: '只记体温，单独成一条，不影响其他指标。',
+    icon: iconBody,
+    fields: [
+      { name: 'temperature', label: '体温（℃）', value: latestValue('temperature') ?? '', required: true, type: 'number', placeholder: '例如 36.8' },
+      { name: 'note', label: '备注（可不填）', value: '', placeholder: '例如：服药后测的' },
+    ],
+    confirmText: '记下来',
+  });
+  if (!values) return;
+  const temperature = Number(values.temperature);
+  if (!values.temperature || Number.isNaN(temperature)) {
+    showToast('填一个有效的体温');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createBodyRecord(activeSpaceId.value, {
+      temperature,
+      note: values.note?.trim() || undefined,
+      recordDate: todayDateKey(),
+    });
+    await loadBodyRecords();
+    showToast(`已记录体温 ${temperature}℃`);
+  });
+}
+
+async function openWeightDialog() {
+  const values = await openFormDialog({
+    eyebrow: '体重',
+    title: '记一次体重',
+    message: '只记体重，单独成一条，方便看长期变化。',
+    icon: iconBody,
+    fields: [
+      { name: 'weight', label: '体重（kg）', value: latestValue('weight') ?? '', required: true, type: 'number', placeholder: '例如 55.5' },
+      { name: 'note', label: '备注（可不填）', value: '', placeholder: '例如：早晨空腹' },
+    ],
+    confirmText: '记下来',
+  });
+  if (!values) return;
+  const weight = Number(values.weight);
+  if (!values.weight || Number.isNaN(weight)) {
+    showToast('填一个有效的体重');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createBodyRecord(activeSpaceId.value, {
+      weight,
+      note: values.note?.trim() || undefined,
+      recordDate: todayDateKey(),
+    });
+    await loadBodyRecords();
+    showToast(`已记录体重 ${weight} kg`);
   });
 }
 
@@ -920,7 +978,9 @@ async function toggleQuestionAsked(question) {
 const composerActions = [
   { id: 'message', label: '说说此刻', desc: '发一条分享，家人朋友都能看到', icon: iconChat, patientOnly: true, bodyRelated: false },
   { id: 'event', label: '加日程', desc: '复诊、检查、取报告、用药提醒', icon: iconCalendar, bodyRelated: false },
-  { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、睡眠等评分和体重', icon: iconBody, bodyRelated: true },
+  { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、乏力、睡眠等评分', icon: iconBody, bodyRelated: true },
+  { id: 'temperature', label: '记体温', desc: '单独记一次体温', icon: iconBody, bodyRelated: true },
+  { id: 'weight', label: '记体重', desc: '单独记一次体重', icon: iconBody, bodyRelated: true },
   { id: 'symptom', label: '记症状', desc: '大便、发烧…记下发生时间', icon: iconBody, bodyRelated: true },
   { id: 'notice', label: '记注意事项', desc: '医生叮嘱的禁忌，每天置顶提醒', icon: iconWarning, bodyRelated: false },
   { id: 'question', label: '问医生的问题', desc: '攒到复诊时一条条问', icon: iconDoctor, bodyRelated: false },
@@ -929,7 +989,7 @@ const composerActions = [
 
 const composerScope = {
   moments: ['message'],
-  body: ['bodyRecord', 'symptom'],
+  body: ['bodyRecord', 'temperature', 'weight', 'symptom'],
   notices: ['notice'],
 };
 const visibleComposerActions = computed(() =>
@@ -964,6 +1024,14 @@ async function runComposerAction(action) {
   }
   if (action.id === 'bodyRecord') {
     openBodyForm();
+    return;
+  }
+  if (action.id === 'temperature') {
+    await openTempDialog();
+    return;
+  }
+  if (action.id === 'weight') {
+    await openWeightDialog();
     return;
   }
   if (action.id === 'symptom') {
@@ -1577,7 +1645,11 @@ function mapMember(member) {
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
-                <p v-if="!todayItems.length" class="empty-note">今天没有安排，休息也很重要。日程到了当天会自动出现在这里。</p>
+                <button v-for="notice in activeNotices" :key="notice.id" class="notice-strip" :class="{ important: notice.important }" type="button" @click="go('notices')">
+                  <img :src="iconWarning" alt="" aria-hidden="true" />
+                  <span>注意：{{ notice.content }}</span>
+                </button>
+                <p v-if="!todayItems.length && !activeNotices.length" class="empty-note">今天没有安排，休息也很重要。日程和注意事项到了会出现在这里。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
                   <div>
@@ -1745,9 +1817,16 @@ function mapMember(member) {
             <p v-if="trendChart.dots.length < 2" class="empty-note">至少要有两天的记录才能连成线。在这个页面点「+」记身体状态，曲线会自己长出来。</p>
             <div v-else class="trend-chart">
               <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" preserveAspectRatio="none" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
+                <defs>
+                  <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="rgba(120,146,124,0.26)" />
+                    <stop offset="100%" stop-color="rgba(120,146,124,0)" />
+                  </linearGradient>
+                </defs>
                 <line :x1="12" :y1="trendChart.height - 14" :x2="trendChart.width - 12" :y2="trendChart.height - 14" class="trend-axis" />
+                <polygon v-if="trendChart.area" :points="trendChart.area" class="trend-area" />
                 <polyline :points="trendChart.line" class="trend-line" />
-                <circle v-for="dot in trendChart.dots" :key="dot.key" :cx="dot.x" :cy="dot.y" r="3" class="trend-dot" />
+                <circle v-for="dot in trendChart.dots" :key="dot.key" :cx="dot.x" :cy="dot.y" r="3.2" class="trend-dot" />
               </svg>
               <div class="trend-legend">
                 <span>{{ trendChart.firstLabel }}</span>
@@ -1894,25 +1973,18 @@ function mapMember(member) {
         <div>
           <p class="eyebrow">每天一条</p>
           <h2 id="bodyform-title">今天身体怎么样？</h2>
+          <p class="section-hint">体温和体重在「+」里有单独的入口，这里只记评分和感受。</p>
           <div class="status-grid large dialog-status-grid">
             <div v-for="record in bodyRecords" :key="record.label" class="status-item">
               <div class="status-label">
                 <span>{{ record.label }}</span>
-                <strong>{{ record.value }}{{ record.label === '体温' ? '℃' : '/10' }}</strong>
+                <strong>{{ record.value }}/10</strong>
               </div>
-              <input v-if="record.label !== '体温'" v-model.number="record.value" type="range" min="0" max="10" />
-              <input v-else v-model.number="record.value" type="number" min="34" max="42" step="0.1" />
-            </div>
-            <div class="status-item">
-              <div class="status-label">
-                <span>体重</span>
-                <strong>{{ weightDraft === '' ? '未填' : `${weightDraft} kg` }}</strong>
-              </div>
-              <input v-model.number="weightDraft" type="number" min="20" max="300" step="0.1" placeholder="kg，可不填" />
+              <input v-model.number="record.value" type="range" min="0" max="10" />
             </div>
           </div>
           <div class="form-row">
-            <input v-model="statusDraft" type="text" placeholder="补一句感受，例如：下午有点恶心，晚饭吃得少" />
+            <input v-model="statusDraft" type="text" placeholder="补一句感受，例如：下午有点恶心，晚饭吃得少（可不填）" />
           </div>
         </div>
         <div class="confirm-actions">

@@ -42,12 +42,12 @@ public final class CareRequests {
       Boolean needsCompanion) {}
 
   public record CreateBodyRecordRequest(
-      @Min(0) @Max(10) int painScore,
-      @Min(0) @Max(10) int fatigueScore,
-      @Min(0) @Max(10) int sleepScore,
-      @Min(0) @Max(10) int moodScore,
-      @Min(0) @Max(10) int appetiteScore,
-      @DecimalMin("34.0") @DecimalMax("42.0") double temperature,
+      @Min(0) @Max(10) Integer painScore,
+      @Min(0) @Max(10) Integer fatigueScore,
+      @Min(0) @Max(10) Integer sleepScore,
+      @Min(0) @Max(10) Integer moodScore,
+      @Min(0) @Max(10) Integer appetiteScore,
+      @DecimalMin("34.0") @DecimalMax("42.0") Double temperature,
       @DecimalMin("20.0") @DecimalMax("300.0") Double weight,
       String note,
       @NotNull LocalDate recordDate) {}
