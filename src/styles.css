@@ -1890,6 +1890,34 @@ textarea {
   outline: none;
 }
 
+.invite-cta {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 12px 0;
+  padding: 13px;
+  color: #fff;
+  background: linear-gradient(145deg, #78927c, #6a8470);
+  border: 0;
+  border-radius: var(--radius);
+  font-size: 15px;
+  font-weight: 800;
+  box-shadow: var(--shadow-card);
+}
+
+.invite-cta img {
+  width: 20px;
+  height: 20px;
+  filter: brightness(0) invert(1);
+}
+
+.invite-cta .member-row,
+.member-row {
+  align-items: center;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;
