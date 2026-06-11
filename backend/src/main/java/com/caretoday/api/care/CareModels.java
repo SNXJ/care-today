@@ -81,8 +81,17 @@ public final class CareModels {
       int moodScore,
       int appetiteScore,
       double temperature,
+      Double weight,
       String note,
       LocalDate recordDate,
+      Instant createdAt) {}
+
+  public record SymptomEvent(
+      UUID id,
+      UUID spaceId,
+      String tag,
+      Instant happenedAt,
+      String note,
       Instant createdAt) {}
 
   public record DoctorQuestion(

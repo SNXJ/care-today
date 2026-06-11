@@ -178,6 +178,47 @@ class CareControllerTest {
   }
 
   @Test
+  void createSymptomEventReturnsCreatedResource() throws Exception {
+    UUID symptomId = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    when(careService.createSymptomEvent(eq(USER_ID), eq(SPACE_ID), any()))
+        .thenReturn(new CareModels.SymptomEvent(
+            symptomId,
+            SPACE_ID,
+            "发烧",
+            Instant.parse("2026-06-11T06:30:00Z"),
+            "38.2 度，物理降温",
+            Instant.parse("2026-06-11T06:31:00Z")));
+
+    mockMvc.perform(post("/api/spaces/{spaceId}/symptoms", SPACE_ID)
+            .with(currentUser())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"tag\":\"发烧\",\"happenedAt\":\"2026-06-11T06:30:00Z\",\"note\":\"38.2 度，物理降温\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(symptomId.toString()))
+        .andExpect(jsonPath("$.tag").value("发烧"));
+  }
+
+  @Test
+  void createSymptomEventWithoutTagReturnsBadRequest() throws Exception {
+    mockMvc.perform(post("/api/spaces/{spaceId}/symptoms", SPACE_ID)
+            .with(currentUser())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"happenedAt\":\"2026-06-11T06:30:00Z\"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void deleteSymptomEventReturnsNoContent() throws Exception {
+    UUID symptomId = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    doNothing().when(careService).deleteSymptomEvent(USER_ID, SPACE_ID, symptomId);
+
+    mockMvc.perform(delete("/api/spaces/{spaceId}/symptoms/{symptomId}", SPACE_ID, symptomId).with(currentUser()))
+        .andExpect(status().isNoContent());
+
+    verify(careService).deleteSymptomEvent(USER_ID, SPACE_ID, symptomId);
+  }
+
+  @Test
   void invalidHelpTaskStatusReturnsBadRequest() throws Exception {
     mockMvc.perform(patch("/api/spaces/{spaceId}/help-tasks/{taskId}", SPACE_ID, EVENT_ID)
             .with(currentUser())

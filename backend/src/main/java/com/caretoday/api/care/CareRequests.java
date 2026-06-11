@@ -48,6 +48,7 @@ public final class CareRequests {
       @Min(0) @Max(10) int moodScore,
       @Min(0) @Max(10) int appetiteScore,
       @DecimalMin("34.0") @DecimalMax("42.0") double temperature,
+      @DecimalMin("20.0") @DecimalMax("300.0") Double weight,
       String note,
       @NotNull LocalDate recordDate) {}
 
@@ -58,8 +59,19 @@ public final class CareRequests {
       @Min(0) @Max(10) Integer moodScore,
       @Min(0) @Max(10) Integer appetiteScore,
       @DecimalMin("34.0") @DecimalMax("42.0") Double temperature,
+      @DecimalMin("20.0") @DecimalMax("300.0") Double weight,
       String note,
       LocalDate recordDate) {}
+
+  public record CreateSymptomEventRequest(
+      @NotBlank String tag,
+      @NotNull Instant happenedAt,
+      String note) {}
+
+  public record UpdateSymptomEventRequest(
+      String tag,
+      Instant happenedAt,
+      String note) {}
 
   public record CreateDoctorQuestionRequest(
       @NotBlank String question,

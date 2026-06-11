@@ -15,17 +15,20 @@ import com.caretoday.api.care.CareModels.NoticeStatus;
 import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
+import com.caretoday.api.care.CareModels.SymptomEvent;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
+import com.caretoday.api.care.CareRequests.CreateSymptomEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
+import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import com.caretoday.api.common.RequestAuditContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -332,7 +335,7 @@ public class CareRepository {
   public List<BodyRecord> listBodyRecords(UUID spaceId) {
     return jdbcTemplate.query(
         """
-        SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
+        SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, created_at
         FROM body_records
         WHERE space_id = ? AND deleted_at IS NULL
         ORDER BY record_date DESC, created_at DESC
@@ -344,7 +347,7 @@ public class CareRepository {
   public Optional<BodyRecord> findBodyRecord(UUID recordId) {
     return jdbcTemplate.query(
             """
-            SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date, created_at
+            SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, created_at
             FROM body_records
             WHERE id = ? AND deleted_at IS NULL
             """,
@@ -359,9 +362,9 @@ public class CareRepository {
     jdbcTemplate.update(
         """
         INSERT INTO body_records (
-          id, space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, note, record_date
+          id, space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         id(id),
         id(spaceId),
@@ -372,6 +375,7 @@ public class CareRepository {
         request.moodScore(),
         request.appetiteScore(),
         request.temperature(),
+        request.weight(),
         request.note(),
         request.recordDate());
     return findBodyRecord(id).orElseThrow();
@@ -413,6 +417,7 @@ public class CareRepository {
             mood_score = COALESCE(?, mood_score),
             appetite_score = COALESCE(?, appetite_score),
             temperature = COALESCE(?, temperature),
+            weight = COALESCE(?, weight),
             note = COALESCE(?, note),
             record_date = COALESCE(?, record_date)
         WHERE id = ? AND space_id = ? AND deleted_at IS NULL
@@ -423,6 +428,7 @@ public class CareRepository {
         request.moodScore(),
         request.appetiteScore(),
         request.temperature(),
+        request.weight(),
         request.note(),
         request.recordDate(),
         id(recordId),
@@ -432,6 +438,69 @@ public class CareRepository {
 
   public boolean deleteBodyRecord(UUID spaceId, UUID recordId) {
     return softDelete("body_records", spaceId, recordId);
+  }
+
+  public List<SymptomEvent> listSymptomEvents(UUID spaceId) {
+    return jdbcTemplate.query(
+        """
+        SELECT id, space_id, tag, happened_at, note, created_at
+        FROM symptom_events
+        WHERE space_id = ? AND deleted_at IS NULL
+        ORDER BY happened_at DESC
+        """,
+        (rs, rowNum) -> mapSymptomEvent(rs),
+        id(spaceId));
+  }
+
+  public Optional<SymptomEvent> findSymptomEvent(UUID symptomId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, tag, happened_at, note, created_at
+            FROM symptom_events
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapSymptomEvent(rs),
+            id(symptomId))
+        .stream()
+        .findFirst();
+  }
+
+  public SymptomEvent createSymptomEvent(UUID spaceId, UUID userId, CreateSymptomEventRequest request) {
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
+        """
+        INSERT INTO symptom_events (id, space_id, tag, happened_at, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        id(id),
+        id(spaceId),
+        request.tag(),
+        Timestamp.from(request.happenedAt()),
+        request.note(),
+        id(userId));
+    return findSymptomEvent(id).orElseThrow();
+  }
+
+  public Optional<SymptomEvent> updateSymptomEvent(UUID spaceId, UUID symptomId, UpdateSymptomEventRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE symptom_events
+        SET tag = COALESCE(?, tag),
+            happened_at = COALESCE(?, happened_at),
+            note = COALESCE(?, note),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.tag()),
+        request.happenedAt() == null ? null : Timestamp.from(request.happenedAt()),
+        request.note(),
+        id(symptomId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findSymptomEvent(symptomId);
+  }
+
+  public boolean deleteSymptomEvent(UUID spaceId, UUID symptomId) {
+    return softDelete("symptom_events", spaceId, symptomId);
   }
 
   public List<DoctorQuestion> listDoctorQuestions(UUID spaceId) {
@@ -878,6 +947,7 @@ public class CareRepository {
         rs.getInt("mood_score"),
         rs.getInt("appetite_score"),
         rs.getDouble("temperature"),
+        rs.getObject("weight") == null ? null : rs.getDouble("weight"),
         rs.getString("note"),
         rs.getDate("record_date").toLocalDate(),
         toInstant(rs, "created_at"));
@@ -904,6 +974,16 @@ public class CareRepository {
         rs.getString("description"),
         HelpTaskStatus.valueOf(rs.getString("status").toUpperCase()),
         rs.getString("claimed_by"),
+        toInstant(rs, "created_at"));
+  }
+
+  private SymptomEvent mapSymptomEvent(ResultSet rs) throws SQLException {
+    return new SymptomEvent(
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
+        rs.getString("tag"),
+        toInstant(rs, "happened_at"),
+        rs.getString("note"),
         toInstant(rs, "created_at"));
   }
 
