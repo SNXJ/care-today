@@ -101,6 +101,29 @@ const notices = ref([]);
 const members = ref([]);
 
 const activeNav = computed(() => navItems.find((item) => item.id === view.value));
+const heroCopy = {
+  today: {
+    title: '今天先照顾好这一件事',
+    lead: '只看今天要做的事，别的先放一边。复诊、检查到了当天会出现在这里。',
+  },
+  timeline: {
+    title: '一起走过的每一天',
+    lead: '过去和未来都按时间排在这里：往上看接下来的计划，往下看已经发生的事。',
+  },
+  moments: {
+    title: '此刻的想法和状态',
+    lead: '记下今天的心情和身体感受，家人朋友打开就能看到，不用一遍遍解释。',
+  },
+  body: {
+    title: '身体的变化看得见',
+    lead: '评分、体温、体重的趋势，加上症状发生的时间，复诊时一目了然。',
+  },
+  notices: {
+    title: '医生叮嘱别忘记',
+    lead: '生活禁忌和注意事项记在这里，生效期间每天在「今天」置顶提醒。',
+  },
+};
+const activeHero = computed(() => heroCopy[view.value] || heroCopy.today);
 const isAuthed = computed(() => Boolean(token.value && currentUser.value));
 const hasSpace = computed(() => Boolean(activeSpaceId.value));
 const todayKey = computed(() => toDateKey(new Date()));
@@ -172,29 +195,6 @@ const timelineItems = computed(() => {
         { label: '地点', value: event.place },
         { label: '陪同', value: event.needsCompanion ? '需要有人陪同' : '不需要陪同' },
         { label: '备注', value: event.note || '没有备注' },
-      ],
-    })),
-    ...bodyRecordItems.value.map((record) => ({
-      id: `body-${record.id}`,
-      kind: 'body',
-      raw: record,
-      type: '身体',
-      title: '记录了一次身体状态',
-      meta: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 体温 ${record.temperature}℃`,
-      detail: record.note || '没有补充备注',
-      at: record.createdAt || record.recordDate,
-      icon: iconBody,
-      view: 'body',
-      accent: 'sage',
-      fields: [
-        { label: '记录时间', value: formatFullDateTime(record.createdAt || record.recordDate) },
-        {
-          label: '评分',
-          value: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 睡眠 ${record.sleepScore}/10 · 心情 ${record.moodScore}/10 · 食欲 ${record.appetiteScore}/10`,
-        },
-        { label: '体温', value: `${record.temperature}℃` },
-        { label: '体重', value: record.weight ? `${record.weight} kg` : '未记录' },
-        { label: '备注', value: record.note || '没有补充备注' },
       ],
     })),
     ...questions.value.map((question) => ({
@@ -440,9 +440,6 @@ function openTimelineDetail(item) {
   detailItem.value = item;
 }
 
-function openNoticeDetail(notice) {
-  detailItem.value = noticeTimelineItem(notice);
-}
 
 function closeDetail() {
   detailItem.value = null;
@@ -717,37 +714,7 @@ async function saveStatus() {
   });
 }
 
-async function editBodyRecordItem(record) {
-  const values = await openFormDialog({
-    eyebrow: '身体记录',
-    title: '编辑这条身体记录',
-    icon: iconBody,
-    fields: [{ name: 'note', label: '当天的感受', value: record.note || '', type: 'textarea' }],
-  });
-  if (!values) return;
-  await withLoading(async () => {
-    await api.updateBodyRecord(activeSpaceId.value, record.id, { note: values.note });
-    await loadBodyRecords();
-    showToast('身体记录已更新');
-  });
-}
 
-async function deleteBodyRecordItem(record) {
-  const confirmed = await openConfirmDialog({
-    eyebrow: '删除记录',
-    title: '删除这条身体记录？',
-    message: '删除后趋势图和时间线里不会再统计这一天。',
-    icon: iconBody,
-    confirmText: '删除',
-    danger: true,
-  });
-  if (!confirmed) return;
-  await withLoading(async () => {
-    await api.deleteBodyRecord(activeSpaceId.value, record.id);
-    await loadBodyRecords();
-    showToast('身体记录已删除');
-  });
-}
 
 function openSymptomForm() {
   const now = new Date();
@@ -960,10 +927,16 @@ const composerActions = [
   { id: 'note', label: '存一条资料', desc: '化验单、用药、医嘱先存成文字', icon: iconFolder, bodyRelated: false },
 ];
 
+const composerScope = {
+  moments: ['message'],
+  body: ['bodyRecord', 'symptom'],
+  notices: ['notice'],
+};
 const visibleComposerActions = computed(() =>
   composerActions.filter((action) => {
     if (action.patientOnly && !isPatient.value) return false;
-    if (view.value === 'body') return action.bodyRelated;
+    const scope = composerScope[view.value];
+    if (scope) return scope.includes(action.id);
     return true;
   })
 );
@@ -1039,31 +1012,7 @@ async function runComposerAction(action) {
   }
 }
 
-function editFromDetail() {
-  const item = detailItem.value;
-  if (!item?.kind || !item.raw) return;
-  detailItem.value = null;
-  if (item.kind === 'event') editEvent(item.raw);
-  else if (item.kind === 'message') editMessage(item.raw);
-  else if (item.kind === 'note') editNote(item.raw);
-  else if (item.kind === 'notice') editNotice(item.raw);
-  else if (item.kind === 'question') editQuestion(item.raw);
-  else if (item.kind === 'body') editBodyRecordItem(item.raw);
-  else if (item.kind === 'symptom') editSymptom(item.raw);
-}
 
-function deleteFromDetail() {
-  const item = detailItem.value;
-  if (!item?.kind || !item.raw) return;
-  detailItem.value = null;
-  if (item.kind === 'event') deleteEvent(item.raw);
-  else if (item.kind === 'message') deleteMessage(item.raw);
-  else if (item.kind === 'note') deleteNote(item.raw);
-  else if (item.kind === 'notice') deleteNotice(item.raw);
-  else if (item.kind === 'question') deleteQuestion(item.raw);
-  else if (item.kind === 'body') deleteBodyRecordItem(item.raw);
-  else if (item.kind === 'symptom') deleteSymptom(item.raw);
-}
 
 async function addMessage() {
   if (!messageDraft.value.trim()) {
@@ -1249,14 +1198,28 @@ async function deleteNotice(notice) {
 }
 
 async function inviteMember() {
-  if (!invitePhone.value.trim()) {
-    showToast('先填写手机号或备注名');
-    return;
-  }
   await withLoading(async () => {
-    const invite = await api.createMemberInvite(activeSpaceId.value, { nickname: invitePhone.value.trim(), role: 'FRIEND' });
+    const invite = await api.createMemberInvite(activeSpaceId.value, {
+      nickname: invitePhone.value.trim() || '家人朋友',
+      role: 'FRIEND',
+    });
     invitePhone.value = '';
-    await showInviteLink(invite);
+    const url = `${window.location.origin}${window.location.pathname}?invite=${invite.token || invite.id}`;
+    const copied = await copyText(url);
+    await openFormDialog({
+      eyebrow: '邀请链接已生成',
+      title: '把这条链接发给家人朋友',
+      message: copied
+        ? '链接已自动复制，直接粘贴到微信发给对方即可。对方打开登录后会自动加入，7 天内有效。'
+        : '长按下面的链接复制后，发到微信给对方。对方打开登录后会自动加入，7 天内有效。',
+      icon: iconLock,
+      fields: [{ name: 'url', label: '邀请链接', value: url, type: 'textarea', readonly: true }],
+      confirmText: copied ? '好的' : '再复制一次',
+      onSubmit: async (values) => {
+        await copyText(values.url);
+        showToast('邀请链接已复制');
+      },
+    });
   });
 }
 
@@ -1535,8 +1498,8 @@ function mapMember(member) {
       <section class="topbar">
         <div>
           <p class="eyebrow">{{ activeNav?.label || '今天' }}</p>
-          <h1>{{ activeSpace?.name || '今天' }}</h1>
-          <p class="lead">不用一个人记住所有事情。这里帮你整理复诊、身体感受、想问医生的问题，以及家人朋友可以接住的具体小事。</p>
+          <h1>{{ activeHero.title }}</h1>
+          <p class="lead">{{ activeHero.lead }}</p>
         </div>
         <div class="top-actions">
           <div class="privacy-pill">
@@ -1614,10 +1577,6 @@ function mapMember(member) {
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
-                <button v-for="notice in activeNotices" :key="notice.id" class="notice-strip" :class="{ important: notice.important }" type="button" @click="openNoticeDetail(notice)">
-                  <img :src="iconWarning" alt="" aria-hidden="true" />
-                  <span>注意：{{ notice.content }}</span>
-                </button>
                 <p v-if="!todayItems.length" class="empty-note">今天没有安排，休息也很重要。日程到了当天会自动出现在这里。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
@@ -1922,10 +1881,6 @@ function mapMember(member) {
           </dl>
         </div>
         <div class="confirm-actions">
-          <template v-if="detailItem.kind && detailItem.raw">
-            <button class="small-btn" type="button" @click="editFromDetail">编辑</button>
-            <button class="small-btn danger" type="button" @click="deleteFromDetail">删除</button>
-          </template>
           <button class="small-btn sage" type="button" @click="closeDetail">知道了</button>
         </div>
       </section>
@@ -2110,22 +2065,19 @@ function mapMember(member) {
         <div>
           <p class="eyebrow">默认最小可见</p>
           <h2 id="members-title">成员与权限</h2>
-          <p>输入对方昵称或备注后生成邀请链接发给对方，对方登录或注册后会出现在成员列表里。链接 7 天内有效。</p>
-          <div class="member-list panel-list">
+          <p>点一下就能生成邀请链接，发到微信给家人朋友，对方打开登录后自动加入。</p>
+          <button class="invite-cta" type="button" :disabled="loading" @click="inviteMember">
+            <img :src="iconChat" alt="" aria-hidden="true" />
+            <span>生成邀请链接并复制</span>
+          </button>
+          <div v-if="members.length" class="member-list panel-list">
             <div v-for="member in members" :key="member.id" class="member-row">
               <div>
                 <strong>{{ member.name }}</strong>
-                <span>{{ member.role }} · {{ member.access }}</span>
+                <span>{{ member.role }} · {{ member.status }}</span>
               </div>
-              <div class="row-actions">
-                <span class="tag">{{ member.status }}</span>
-                <button class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
-              </div>
+              <button v-if="member.role !== '患者/管理员'" class="small-btn danger" type="button" @click="removeMember(member)">移除</button>
             </div>
-          </div>
-          <div class="form-row">
-            <input v-model="invitePhone" type="text" placeholder="输入手机号、昵称或邀请备注" />
-            <button class="small-btn" type="button" @click="inviteMember">生成邀请链接</button>
           </div>
           <div class="form-row">
             <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
