@@ -20,7 +20,7 @@ const disclaimer =
 const navItems = [
   { id: 'today', label: '今天', icon: iconToday },
   { id: 'timeline', label: '时间线', icon: iconTimeline },
-  { id: 'moments', label: '朋友圈', icon: iconChat },
+  { id: 'moments', label: '分享', icon: iconChat },
   { id: 'body', label: '身体', icon: iconBody },
   { id: 'notices', label: '注意', icon: iconWarning },
 ];
@@ -69,13 +69,12 @@ const membersOpen = ref(false);
 const currentRole = ref(localStorage.getItem('care-today-role') || '');
 const trendMetric = ref('疼痛');
 const trendDays = ref(7);
-const noticeDraft = ref({
-  content: '',
-  detail: '',
-  important: false,
-  startsOn: '',
-  endsOn: '',
-});
+const bodyFormOpen = ref(false);
+const symptomFormOpen = ref(false);
+const weightDraft = ref('');
+const symptomPresets = ['大便', '腹泻', '发烧', '乏力', '疼痛', '手脚发麻'];
+const symptomDraft = ref({ tag: '', customTag: '', happenedAt: '', note: '' });
+const symptoms = ref([]);
 const detailItem = ref(null);
 const invitePhone = ref('');
 const privacyAccepted = ref(false);
@@ -143,6 +142,14 @@ const activeNotices = computed(() =>
   })
 );
 const archivedNotices = computed(() => notices.value.filter((notice) => notice.archived));
+const todaySymptoms = computed(() => symptoms.value.filter((symptom) => symptom.dateKey === todayKey.value));
+const recentSymptoms = computed(() => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  return symptoms.value.filter(
+    (symptom) => symptom.dateKey !== todayKey.value && new Date(symptom.happenedAt) >= cutoff
+  );
+});
 const upcomingEvents = computed(() =>
   events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 );
@@ -170,6 +177,7 @@ const timelineItems = computed(() => {
     ...bodyRecordItems.value.map((record) => ({
       id: `body-${record.id}`,
       kind: 'body',
+      raw: record,
       type: '身体',
       title: '记录了一次身体状态',
       meta: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 体温 ${record.temperature}℃`,
@@ -185,6 +193,7 @@ const timelineItems = computed(() => {
           value: `疼痛 ${record.painScore}/10 · 乏力 ${record.fatigueScore}/10 · 睡眠 ${record.sleepScore}/10 · 心情 ${record.moodScore}/10 · 食欲 ${record.appetiteScore}/10`,
         },
         { label: '体温', value: `${record.temperature}℃` },
+        { label: '体重', value: record.weight ? `${record.weight} kg` : '未记录' },
         { label: '备注', value: record.note || '没有补充备注' },
       ],
     })),
@@ -210,7 +219,7 @@ const timelineItems = computed(() => {
       id: `message-${message.id}`,
       kind: 'message',
       raw: message,
-      type: '动态',
+      type: '分享',
       title: message.text,
       meta: message.author,
       detail: '一条朋友圈动态',
@@ -243,6 +252,24 @@ const timelineItems = computed(() => {
         { label: '内容', value: note.content || '资料文本已保存' },
       ],
     })),
+    ...symptoms.value.map((symptom) => ({
+      id: `symptom-${symptom.id}`,
+      kind: 'symptom',
+      raw: symptom,
+      type: '症状',
+      title: symptom.tag,
+      meta: symptom.timeLabel,
+      detail: symptom.note || '记录了一次症状发生的时间',
+      at: symptom.happenedAt,
+      icon: iconBody,
+      view: 'body',
+      accent: 'amber',
+      fields: [
+        { label: '症状', value: symptom.tag },
+        { label: '发生时间', value: formatFullDateTime(symptom.happenedAt) },
+        { label: '补充说明', value: symptom.note || '没有补充说明' },
+      ],
+    })),
     ...notices.value.map(noticeTimelineItem),
   ];
 
@@ -264,11 +291,12 @@ const bodyRecordPayload = computed(() => ({
   moodScore: Number(bodyRecords.value.find((item) => item.label === '心情')?.value || 0),
   appetiteScore: Number(bodyRecords.value.find((item) => item.label === '食欲')?.value || 0),
   temperature: Number(bodyRecords.value.find((item) => item.label === '体温')?.value || 37),
+  weight: weightDraft.value === '' || weightDraft.value === null ? undefined : Number(weightDraft.value),
   note: statusDraft.value.trim(),
   recordDate: new Date().toISOString().slice(0, 10),
 }));
 
-const trendMetrics = ['疼痛', '乏力', '睡眠', '心情', '食欲', '体温'];
+const trendMetrics = ['疼痛', '乏力', '睡眠', '心情', '食欲', '体温', '体重'];
 const trendMetricFields = {
   疼痛: 'painScore',
   乏力: 'fatigueScore',
@@ -276,6 +304,7 @@ const trendMetricFields = {
   心情: 'moodScore',
   食欲: 'appetiteScore',
   体温: 'temperature',
+  体重: 'weight',
 };
 const trendPoints = computed(() => {
   const byDay = new Map();
@@ -308,10 +337,17 @@ const trendChart = computed(() => {
   const height = 120;
   const padX = 12;
   const padY = 14;
-  const isTemp = trendMetric.value === '体温';
-  const min = isTemp ? 34 : 0;
-  const max = isTemp ? 42 : 10;
   const points = trendPoints.value;
+  const values = points.filter((point) => point.value !== null).map((point) => point.value);
+  let min = 0;
+  let max = 10;
+  if (trendMetric.value === '体温') {
+    min = 34;
+    max = 42;
+  } else if (trendMetric.value === '体重') {
+    min = values.length ? Math.floor(Math.min(...values)) - 1 : 0;
+    max = values.length ? Math.ceil(Math.max(...values)) + 1 : 10;
+  }
   const step = points.length > 1 ? (width - padX * 2) / (points.length - 1) : 0;
   const dots = points
     .filter((point) => point.value !== null)
@@ -567,6 +603,7 @@ function logout() {
   messages.value = [];
   notes.value = [];
   notices.value = [];
+  symptoms.value = [];
   members.value = [];
   currentRole.value = '';
   localStorage.removeItem('care-today-token');
@@ -606,7 +643,7 @@ async function selectSpace(spaceId) {
   members.value = (detail.members || []).map(mapMember);
   currentRole.value = detail.currentRole || '';
   localStorage.setItem('care-today-role', currentRole.value);
-  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadMessages(), loadNotes(), loadNotices()]);
+  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadMessages(), loadNotes(), loadNotices(), loadSymptoms()]);
 }
 
 async function loadEvents() {
@@ -656,57 +693,126 @@ async function loadNotices() {
   notices.value = (await api.listNotices(activeSpaceId.value)).map(mapNotice);
 }
 
+async function loadSymptoms() {
+  symptoms.value = (await api.listSymptoms(activeSpaceId.value)).map(mapSymptom);
+}
+
+function openBodyForm() {
+  weightDraft.value = bodyRecordItems.value[0]?.weight ?? '';
+  bodyFormOpen.value = true;
+}
+
 async function saveStatus() {
   if (!statusDraft.value.trim()) {
-    showToast('先写一点今天的感受');
+    showToast('补一句今天的身体感受再保存');
     return;
   }
   await withLoading(async () => {
     const result = await api.createBodyRecord(activeSpaceId.value, bodyRecordPayload.value);
     statusNote.value = result.record.note || '';
     statusDraft.value = '';
+    bodyFormOpen.value = false;
     await loadBodyRecords();
     showToast('今天的身体状态已记录');
   });
 }
 
-async function editLatestBodyRecord() {
-  const latest = bodyRecordItems.value[0];
-  if (!latest) {
-    showToast('还没有身体记录');
-    return;
-  }
+async function editBodyRecordItem(record) {
   const values = await openFormDialog({
     eyebrow: '身体记录',
-    title: '编辑最近身体记录',
+    title: '编辑这条身体记录',
     icon: iconBody,
-    fields: [{ name: 'note', label: '备注', value: latest.note || '', type: 'textarea' }],
+    fields: [{ name: 'note', label: '当天的感受', value: record.note || '', type: 'textarea' }],
   });
   if (!values) return;
   await withLoading(async () => {
-    await api.updateBodyRecord(activeSpaceId.value, latest.id, { note: values.note });
+    await api.updateBodyRecord(activeSpaceId.value, record.id, { note: values.note });
     await loadBodyRecords();
     showToast('身体记录已更新');
   });
 }
 
-async function deleteLatestBodyRecord() {
-  const latest = bodyRecordItems.value[0];
-  if (!latest) return;
+async function deleteBodyRecordItem(record) {
   const confirmed = await openConfirmDialog({
     eyebrow: '删除记录',
-    title: '删除最近一条身体记录？',
-    message: '删除后默认列表里不会再显示这条记录。',
+    title: '删除这条身体记录？',
+    message: '删除后趋势图和时间线里不会再统计这一天。',
     icon: iconBody,
     confirmText: '删除',
     danger: true,
   });
   if (!confirmed) return;
   await withLoading(async () => {
-    await api.deleteBodyRecord(activeSpaceId.value, latest.id);
-    statusNote.value = '';
+    await api.deleteBodyRecord(activeSpaceId.value, record.id);
     await loadBodyRecords();
     showToast('身体记录已删除');
+  });
+}
+
+function openSymptomForm() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  symptomDraft.value = { tag: '', customTag: '', happenedAt: now.toISOString().slice(0, 16), note: '' };
+  symptomFormOpen.value = true;
+}
+
+async function addSymptom() {
+  const tag = (symptomDraft.value.tag === '__custom__' ? symptomDraft.value.customTag : symptomDraft.value.tag).trim();
+  if (!tag) {
+    showToast('先选一个症状标签，或自己写一个');
+    return;
+  }
+  if (!symptomDraft.value.happenedAt) {
+    showToast('选一下发生的时间');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createSymptom(activeSpaceId.value, {
+      tag,
+      happenedAt: new Date(symptomDraft.value.happenedAt).toISOString(),
+      note: symptomDraft.value.note.trim() || undefined,
+    });
+    symptomFormOpen.value = false;
+    await loadSymptoms();
+    showToast(`已记下：${tag}`);
+  });
+}
+
+async function editSymptom(symptom) {
+  const values = await openFormDialog({
+    eyebrow: '症状记录',
+    title: `编辑「${symptom.tag}」`,
+    icon: iconBody,
+    fields: [
+      { name: 'tag', label: '症状', value: symptom.tag, required: true },
+      { name: 'note', label: '补充说明', value: symptom.note || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
+  await withLoading(async () => {
+    await api.updateSymptom(activeSpaceId.value, symptom.id, {
+      tag: values.tag.trim(),
+      note: values.note ?? symptom.note ?? '',
+    });
+    await loadSymptoms();
+    showToast('症状记录已更新');
+  });
+}
+
+async function deleteSymptom(symptom) {
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除症状记录',
+    title: `删除「${symptom.tag}」这条记录？`,
+    message: symptom.timeLabel,
+    icon: iconBody,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
+  await withLoading(async () => {
+    await api.deleteSymptom(activeSpaceId.value, symptom.id);
+    await loadSymptoms();
+    showToast('症状记录已删除');
   });
 }
 
@@ -845,16 +951,21 @@ async function toggleQuestionAsked(question) {
 }
 
 const composerActions = [
-  { id: 'message', label: '说说此刻', desc: '发到朋友圈，家人朋友都能看到', icon: iconChat, patientOnly: true },
-  { id: 'event', label: '加日程', desc: '复诊、检查、用药提醒', icon: iconCalendar },
-  { id: 'body', label: '记身体', desc: '疼痛、乏力、睡眠、心情', icon: iconBody },
-  { id: 'notice', label: '记注意事项', desc: '医嘱和生活禁忌', icon: iconWarning },
-  { id: 'question', label: '问医生的问题', desc: '复诊前先记下来', icon: iconDoctor },
-  { id: 'note', label: '存一条资料', desc: '报告名称、用药、医嘱备注', icon: iconFolder },
+  { id: 'message', label: '说说此刻', desc: '发一条分享，家人朋友都能看到', icon: iconChat, patientOnly: true, bodyRelated: false },
+  { id: 'event', label: '加日程', desc: '复诊、检查、取报告、用药提醒', icon: iconCalendar, bodyRelated: false },
+  { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、睡眠等评分和体重', icon: iconBody, bodyRelated: true },
+  { id: 'symptom', label: '记症状', desc: '大便、发烧…记下发生时间', icon: iconBody, bodyRelated: true },
+  { id: 'notice', label: '记注意事项', desc: '医生叮嘱的禁忌，每天置顶提醒', icon: iconWarning, bodyRelated: false },
+  { id: 'question', label: '问医生的问题', desc: '攒到复诊时一条条问', icon: iconDoctor, bodyRelated: false },
+  { id: 'note', label: '存一条资料', desc: '化验单、用药、医嘱先存成文字', icon: iconFolder, bodyRelated: false },
 ];
 
 const visibleComposerActions = computed(() =>
-  composerActions.filter((action) => !action.patientOnly || isPatient.value)
+  composerActions.filter((action) => {
+    if (action.patientOnly && !isPatient.value) return false;
+    if (view.value === 'body') return action.bodyRelated;
+    return true;
+  })
 );
 
 async function runComposerAction(action) {
@@ -863,7 +974,7 @@ async function runComposerAction(action) {
     const values = await openFormDialog({
       eyebrow: '说说此刻',
       title: '现在想说点什么？',
-      message: '会发布到朋友圈，家人朋友都能看到。',
+      message: '会发布到「分享」，家人朋友都能看到。',
       icon: iconMessage,
       fields: [{ name: 'text', label: '内容', value: '', required: true, type: 'textarea', placeholder: '此刻的想法、状态或想说的话' }],
       confirmText: '发布',
@@ -878,12 +989,16 @@ async function runComposerAction(action) {
     await openEventDialog();
     return;
   }
-  if (action.id === 'body') {
-    go('body');
+  if (action.id === 'bodyRecord') {
+    openBodyForm();
+    return;
+  }
+  if (action.id === 'symptom') {
+    openSymptomForm();
     return;
   }
   if (action.id === 'notice') {
-    go('notices');
+    await openNoticeDialog();
     return;
   }
   if (action.id === 'question') {
@@ -933,6 +1048,8 @@ function editFromDetail() {
   else if (item.kind === 'note') editNote(item.raw);
   else if (item.kind === 'notice') editNotice(item.raw);
   else if (item.kind === 'question') editQuestion(item.raw);
+  else if (item.kind === 'body') editBodyRecordItem(item.raw);
+  else if (item.kind === 'symptom') editSymptom(item.raw);
 }
 
 function deleteFromDetail() {
@@ -944,6 +1061,8 @@ function deleteFromDetail() {
   else if (item.kind === 'note') deleteNote(item.raw);
   else if (item.kind === 'notice') deleteNotice(item.raw);
   else if (item.kind === 'question') deleteQuestion(item.raw);
+  else if (item.kind === 'body') deleteBodyRecordItem(item.raw);
+  else if (item.kind === 'symptom') deleteSymptom(item.raw);
 }
 
 async function addMessage() {
@@ -1047,22 +1166,32 @@ async function deleteNote(note) {
   });
 }
 
-async function addNotice() {
-  if (!noticeDraft.value.content.trim()) {
-    showToast('先写下要注意的事');
-    return;
-  }
+async function openNoticeDialog() {
+  const values = await openFormDialog({
+    eyebrow: '注意事项',
+    title: '记一条注意事项',
+    message: '医生叮嘱的禁忌和要小心的事。生效期间每天在「今天」页置顶提醒。',
+    icon: iconWarning,
+    fields: [
+      { name: 'content', label: '要注意的事', value: '', required: true, placeholder: '例如：化疗期间避免生食' },
+      { name: 'detail', label: '补充说明', value: '', type: 'textarea' },
+      { name: 'startsOn', label: '开始日期（可不填）', value: '', type: 'date' },
+      { name: 'endsOn', label: '结束日期（可不填，留空=长期）', value: '', type: 'date' },
+      { name: 'important', label: '标为重要', value: false, type: 'checkbox' },
+    ],
+    confirmText: '记下来',
+  });
+  if (!values) return;
   await withLoading(async () => {
     await api.createNotice(activeSpaceId.value, {
-      content: noticeDraft.value.content.trim(),
-      detail: noticeDraft.value.detail.trim() || undefined,
-      important: noticeDraft.value.important,
-      startsOn: noticeDraft.value.startsOn || undefined,
-      endsOn: noticeDraft.value.endsOn || undefined,
+      content: values.content.trim(),
+      detail: values.detail?.trim() || undefined,
+      important: Boolean(values.important),
+      startsOn: values.startsOn || undefined,
+      endsOn: values.endsOn || undefined,
     });
-    noticeDraft.value = { content: '', detail: '', important: false, startsOn: '', endsOn: '' };
     await loadNotices();
-    showToast('注意事项已记录');
+    showToast('注意事项已记下，生效期间每天提醒');
   });
 }
 
@@ -1299,6 +1428,20 @@ function mapNote(note) {
   };
 }
 
+function mapSymptom(symptom) {
+  const happened = new Date(symptom.happenedAt);
+  return {
+    id: symptom.id,
+    tag: symptom.tag,
+    note: symptom.note || '',
+    happenedAt: symptom.happenedAt,
+    dateKey: toDateKey(happened),
+    timeLabel: happened.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    clock: happened.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: symptom.createdAt,
+  };
+}
+
 function mapNotice(notice) {
   return {
     id: notice.id,
@@ -1475,7 +1618,7 @@ function mapMember(member) {
                   <img :src="iconWarning" alt="" aria-hidden="true" />
                   <span>注意：{{ notice.content }}</span>
                 </button>
-                <p v-if="!todayItems.length" class="empty-note">今天没有要做的事，好好休息。用右下角「+」加的日程到了当天会出现在这里。</p>
+                <p v-if="!todayItems.length" class="empty-note">今天没有安排，休息也很重要。日程到了当天会自动出现在这里。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
                   <div>
@@ -1495,31 +1638,6 @@ function mapMember(member) {
             </div>
           </article>
 
-          <article class="card">
-            <header class="card-header">
-              <div class="card-title">
-                <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
-                <h2>今天身体怎么样</h2>
-              </div>
-              <span class="tag">家人可在时间线看到</span>
-            </header>
-            <div class="card-body">
-              <p class="section-hint">记录疼痛、乏力、睡眠和心情，并补一句今天的感受。保存后会进入“身体”和“时间线”，方便复诊前回看。</p>
-              <div class="status-grid">
-                <div v-for="record in bodyRecords.slice(0, 4)" :key="record.label" class="status-item">
-                  <div class="status-label">
-                    <span>{{ record.label }}</span>
-                    <strong>{{ record.value }}/10</strong>
-                  </div>
-                  <div class="range-line"><span :style="{ width: `${record.value * 10}%` }"></span></div>
-                </div>
-              </div>
-              <div class="form-row">
-                <input v-model="statusDraft" type="text" placeholder="写一句今天的感受，例如：下午有点恶心，晚饭吃得少" />
-                <button class="small-btn sage" type="button" @click="saveStatus">记录今天状态</button>
-              </div>
-            </div>
-          </article>
         </div>
 
         <aside class="side-stack">
@@ -1556,16 +1674,11 @@ function mapMember(member) {
               <div>
                 <span class="calendar-kicker">过去和未来都在这里</span>
                 <strong>{{ activeSpace?.patientNickname || currentUser.nickname }} 的照护动态</strong>
-                <p>日程、身体记录、问题清单、注意事项、朋友圈动态和资料都会汇总到这条时间线上。往上看接下来的计划，往下看已经发生的事，点击任何一条可以查看详情。</p>
-              </div>
-              <div class="timeline-jump">
-                <button class="small-btn sage" type="button" @click="openEventDialog">加日程</button>
-                <button class="small-btn" type="button" @click="go('body')">记身体</button>
-                <button class="small-btn" type="button" @click="go('notices')">记注意</button>
+                <p>日程、身体记录、症状、问题清单、注意事项、分享和资料都会按时间汇总在这里。往上看接下来的计划，往下看已经发生的事，点开任何一条能看详情、改内容。</p>
               </div>
             </div>
 
-            <p v-if="!timelineItems.length" class="empty-note">还没有动态。先添加一条日程、身体记录、问题或朋友圈动态，时间线会自动汇总。</p>
+            <p v-if="!timelineItems.length" class="empty-note">时间线还空着。点右下角「+」记第一笔，所有记录都会按时间在这里排好。</p>
             <div v-else class="timeline-list">
               <button
                 v-for="item in timelineFutureItems"
@@ -1625,18 +1738,12 @@ function mapMember(member) {
           <header class="card-header">
             <div class="card-title">
               <img class="icon" :src="iconChat" alt="" aria-hidden="true" />
-              <h2>朋友圈</h2>
+              <h2>分享</h2>
             </div>
-            <span class="tag">{{ isPatient ? '想到什么就记下来' : '只有患者本人可以发布' }}</span>
+            <span class="tag">{{ isPatient ? '在「+」里点「说说此刻」发布' : '只有患者本人可以发布' }}</span>
           </header>
           <div class="card-body">
-            <div v-if="isPatient" class="moments-composer">
-              <textarea v-model="messageDraft" rows="3" placeholder="此刻想说点什么？想法、状态、想让家人知道的事…"></textarea>
-              <div class="form-row">
-                <button class="small-btn sage" type="button" :disabled="loading" @click="addMessage">发布</button>
-              </div>
-            </div>
-            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有动态。写下此刻的想法和状态，家人朋友都能看到。' : '还没有动态。' }}</p>
+            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有分享过。点右下角「+」说说此刻的想法和状态，家人打开就能看到。' : 'TA 还没有发过分享，过两天再来看看。' }}</p>
             <div v-else class="message-list moments-feed">
               <div v-for="message in messages" :key="message.id" class="message">
                 <p>{{ message.text }}</p>
@@ -1652,35 +1759,6 @@ function mapMember(member) {
       </section>
 
       <section v-else-if="view === 'body'" class="single-stack">
-        <article class="card">
-          <header class="card-header">
-            <div class="card-title">
-              <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
-              <h2>身体记录</h2>
-            </div>
-            <span class="tag">每天一条，复诊前回顾</span>
-          </header>
-          <div class="card-body">
-            <div class="status-grid large">
-              <div v-for="record in bodyRecords" :key="record.label" class="status-item">
-                <div class="status-label">
-                  <span>{{ record.label }}</span>
-                  <strong>{{ record.value }}{{ record.label === '体温' ? '℃' : '/10' }}</strong>
-                </div>
-                <input v-if="record.label !== '体温'" v-model.number="record.value" type="range" min="0" max="10" />
-                <input v-else v-model.number="record.value" type="number" min="34" max="42" step="0.1" />
-              </div>
-            </div>
-            <div class="form-row">
-              <input v-model="statusDraft" type="text" placeholder="写一句今天的身体感受" />
-              <button class="small-btn sage" type="button" @click="saveStatus">记录今天状态</button>
-              <button class="small-btn" type="button" @click="editLatestBodyRecord">编辑最近</button>
-              <button class="small-btn danger" type="button" @click="deleteLatestBodyRecord">删除最近</button>
-            </div>
-            <p v-if="statusNote" class="saved-note">最近记录：{{ statusNote }}</p>
-          </div>
-        </article>
-
         <article class="card">
           <header class="card-header">
             <div class="card-title">
@@ -1705,7 +1783,7 @@ function mapMember(member) {
                 {{ metric }}
               </button>
             </div>
-            <p v-if="trendChart.dots.length < 2" class="empty-note">记录还不够多。连续记录两天以上，这里会画出{{ trendMetric }}的变化曲线。</p>
+            <p v-if="trendChart.dots.length < 2" class="empty-note">至少要有两天的记录才能连成线。在这个页面点「+」记身体状态，曲线会自己长出来。</p>
             <div v-else class="trend-chart">
               <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" preserveAspectRatio="none" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
                 <line :x1="12" :y1="trendChart.height - 14" :x2="trendChart.width - 12" :y2="trendChart.height - 14" class="trend-axis" />
@@ -1714,10 +1792,53 @@ function mapMember(member) {
               </svg>
               <div class="trend-legend">
                 <span>{{ trendChart.firstLabel }}</span>
-                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : '分' }}）· 共 {{ trendChart.dots.length }} 天有记录</span>
+                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : trendMetric === '体重' ? 'kg' : '分' }}）· 共 {{ trendChart.dots.length }} 天有记录</span>
                 <span>{{ trendChart.lastLabel }}</span>
               </div>
             </div>
+          </div>
+        </article>
+
+        <article class="card">
+          <header class="card-header">
+            <div class="card-title">
+              <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
+              <h2>症状记录</h2>
+            </div>
+            <span class="tag">什么时间发生了什么</span>
+          </header>
+          <div class="card-body">
+            <p class="section-hint">大便、发烧这类「某个时间发生的事」记在这里，复诊时医生常会问到次数和时间。</p>
+            <h3 class="symptom-subhead">今天</h3>
+            <p v-if="!todaySymptoms.length" class="empty-note">今天还没有症状记录。在这个页面点「+」选「记症状」，时间会自动带上。</p>
+            <div v-else class="symptom-list">
+              <div v-for="symptom in todaySymptoms" :key="symptom.id" class="symptom-row">
+                <strong class="time">{{ symptom.clock }}</strong>
+                <div>
+                  <strong>{{ symptom.tag }}</strong>
+                  <span v-if="symptom.note">{{ symptom.note }}</span>
+                </div>
+                <div class="row-actions">
+                  <button class="small-btn" type="button" @click="editSymptom(symptom)">编辑</button>
+                  <button class="small-btn danger" type="button" @click="deleteSymptom(symptom)">删除</button>
+                </div>
+              </div>
+            </div>
+            <template v-if="recentSymptoms.length">
+              <h3 class="symptom-subhead">最近 7 天</h3>
+              <div class="symptom-list">
+                <div v-for="symptom in recentSymptoms" :key="symptom.id" class="symptom-row past">
+                  <strong class="time">{{ symptom.timeLabel }}</strong>
+                  <div>
+                    <strong>{{ symptom.tag }}</strong>
+                    <span v-if="symptom.note">{{ symptom.note }}</span>
+                  </div>
+                  <div class="row-actions">
+                    <button class="small-btn danger" type="button" @click="deleteSymptom(symptom)">删除</button>
+                  </div>
+                </div>
+              </div>
+            </template>
           </div>
         </article>
 
@@ -1736,8 +1857,8 @@ function mapMember(member) {
             <span class="tag">生效中的会显示在“今天”</span>
           </header>
           <div class="card-body">
-            <p class="section-hint">把医生的叮嘱和生活禁忌记在这里，例如“化疗期间避免生食”“术后两周不要提重物”。生效中的注意事项会置顶显示在“今天”页面，添加动态会进入时间线。</p>
-            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。下方添加后全家都能看到。</p>
+            <p class="section-hint">医生叮嘱的禁忌都在这里管理：生效中的每天置顶在「今天」页，过期或不再需要的可以归档。</p>
+            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。点右下角「+」选「记注意事项」，比如「化疗期间避免生食」。</p>
             <div class="notice-list">
               <div v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }">
                 <img :src="iconWarning" alt="" aria-hidden="true" />
@@ -1767,24 +1888,6 @@ function mapMember(member) {
                 </div>
               </div>
             </div>
-            <div class="event-form">
-              <input v-model="noticeDraft.content" type="text" placeholder="要注意的事，例如：化疗期间避免生食" />
-              <input v-model="noticeDraft.detail" type="text" placeholder="补充说明，可选" />
-              <label class="inline-check">
-                <span>开始</span>
-                <input v-model="noticeDraft.startsOn" type="date" />
-              </label>
-              <label class="inline-check">
-                <span>结束</span>
-                <input v-model="noticeDraft.endsOn" type="date" />
-              </label>
-              <label class="inline-check">
-                <input v-model="noticeDraft.important" type="checkbox" />
-                <span>重要</span>
-              </label>
-              <button class="small-btn sage" type="button" @click="addNotice">添加注意事项</button>
-            </div>
-            <p class="section-hint">开始和结束日期都可以不填，表示长期有效。</p>
           </div>
         </article>
         <article class="card urgent">
@@ -1824,6 +1927,91 @@ function mapMember(member) {
             <button class="small-btn danger" type="button" @click="deleteFromDetail">删除</button>
           </template>
           <button class="small-btn sage" type="button" @click="closeDetail">知道了</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="bodyFormOpen" class="modal-backdrop" role="presentation" @click.self="bodyFormOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="bodyform-title">
+        <div class="confirm-icon accent-sage">
+          <img :src="iconBody" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">每天一条</p>
+          <h2 id="bodyform-title">今天身体怎么样？</h2>
+          <div class="status-grid large dialog-status-grid">
+            <div v-for="record in bodyRecords" :key="record.label" class="status-item">
+              <div class="status-label">
+                <span>{{ record.label }}</span>
+                <strong>{{ record.value }}{{ record.label === '体温' ? '℃' : '/10' }}</strong>
+              </div>
+              <input v-if="record.label !== '体温'" v-model.number="record.value" type="range" min="0" max="10" />
+              <input v-else v-model.number="record.value" type="number" min="34" max="42" step="0.1" />
+            </div>
+            <div class="status-item">
+              <div class="status-label">
+                <span>体重</span>
+                <strong>{{ weightDraft === '' ? '未填' : `${weightDraft} kg` }}</strong>
+              </div>
+              <input v-model.number="weightDraft" type="number" min="20" max="300" step="0.1" placeholder="kg，可不填" />
+            </div>
+          </div>
+          <div class="form-row">
+            <input v-model="statusDraft" type="text" placeholder="补一句感受，例如：下午有点恶心，晚饭吃得少" />
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="bodyFormOpen = false">取消</button>
+          <button class="small-btn sage" type="button" :disabled="loading" @click="saveStatus">保存今天的状态</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="symptomFormOpen" class="modal-backdrop" role="presentation" @click.self="symptomFormOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="symptomform-title">
+        <div class="confirm-icon accent-amber">
+          <img :src="iconBody" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">什么时间发生了什么</p>
+          <h2 id="symptomform-title">记一次症状</h2>
+          <div class="symptom-tags">
+            <button
+              v-for="preset in symptomPresets"
+              :key="preset"
+              class="trend-chip"
+              :class="{ active: symptomDraft.tag === preset }"
+              type="button"
+              @click="symptomDraft.tag = preset"
+            >
+              {{ preset }}
+            </button>
+            <button
+              class="trend-chip"
+              :class="{ active: symptomDraft.tag === '__custom__' }"
+              type="button"
+              @click="symptomDraft.tag = '__custom__'"
+            >
+              自定义…
+            </button>
+          </div>
+          <div v-if="symptomDraft.tag === '__custom__'" class="form-row">
+            <input v-model="symptomDraft.customTag" type="text" placeholder="自己写一个，例如：头晕" />
+          </div>
+          <div class="dialog-fields">
+            <label class="dialog-field">
+              <span>发生时间</span>
+              <input v-model="symptomDraft.happenedAt" type="datetime-local" />
+            </label>
+            <label class="dialog-field">
+              <span>补充说明（可不填）</span>
+              <input v-model="symptomDraft.note" type="text" placeholder="例如：38.2 度，吃了退烧药" />
+            </label>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="symptomFormOpen = false">取消</button>
+          <button class="small-btn sage" type="button" :disabled="loading" @click="addSymptom">记下来</button>
         </div>
       </section>
     </div>

@@ -1829,6 +1829,67 @@ textarea {
   accent-color: var(--sage);
 }
 
+.symptom-subhead {
+  margin: 14px 0 8px;
+  color: var(--soft);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.symptom-list {
+  display: grid;
+  gap: 8px;
+}
+
+.symptom-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.symptom-row.past {
+  background: var(--panel-strong);
+}
+
+.symptom-row > div strong {
+  display: block;
+  font-size: 14px;
+}
+
+.symptom-row > div span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.symptom-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.dialog-status-grid {
+  margin-top: 12px;
+}
+
+.dialog-status-grid input[type='number'] {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  outline: none;
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;

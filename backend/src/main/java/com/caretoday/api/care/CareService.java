@@ -11,6 +11,7 @@ import com.caretoday.api.care.CareModels.MemberStatus;
 import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
+import com.caretoday.api.care.CareModels.SymptomEvent;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateDoctorQuestionRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
@@ -18,6 +19,7 @@ import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
+import com.caretoday.api.care.CareRequests.CreateSymptomEventRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
@@ -28,6 +30,7 @@ import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
+import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -350,6 +353,34 @@ public class CareService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Notice not found");
     }
     careRepository.audit(spaceId, currentUserId, "notice.delete", "care_notice", noticeId);
+  }
+
+  public List<SymptomEvent> listSymptomEvents(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
+    return careRepository.listSymptomEvents(spaceId);
+  }
+
+  public SymptomEvent createSymptomEvent(UUID currentUserId, UUID spaceId, CreateSymptomEventRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    SymptomEvent symptom = careRepository.createSymptomEvent(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "symptom.create", "symptom_event", symptom.id());
+    return symptom;
+  }
+
+  public SymptomEvent updateSymptomEvent(UUID currentUserId, UUID spaceId, UUID symptomId, UpdateSymptomEventRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    SymptomEvent symptom = careRepository.updateSymptomEvent(spaceId, symptomId, request)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Symptom event not found"));
+    careRepository.audit(spaceId, currentUserId, "symptom.update", "symptom_event", symptom.id());
+    return symptom;
+  }
+
+  public void deleteSymptomEvent(UUID currentUserId, UUID spaceId, UUID symptomId) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (!careRepository.deleteSymptomEvent(spaceId, symptomId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Symptom event not found");
+    }
+    careRepository.audit(spaceId, currentUserId, "symptom.delete", "symptom_event", symptomId);
   }
 
   private void ensureActiveMember(UUID spaceId, UUID currentUserId) {

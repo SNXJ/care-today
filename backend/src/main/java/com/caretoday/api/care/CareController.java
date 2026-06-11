@@ -9,6 +9,7 @@ import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
+import com.caretoday.api.care.CareRequests.CreateSymptomEventRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
 import com.caretoday.api.care.CareRequests.InviteMemberRequest;
@@ -19,6 +20,7 @@ import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
+import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -227,6 +229,27 @@ public class CareController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteNote(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID noteId) {
     careService.deleteNote(currentUser(httpRequest).id(), spaceId, noteId);
+  }
+
+  @GetMapping("/spaces/{spaceId}/symptoms")
+  public Object listSymptomEvents(HttpServletRequest httpRequest, @PathVariable UUID spaceId) {
+    return careService.listSymptomEvents(currentUser(httpRequest).id(), spaceId);
+  }
+
+  @PostMapping("/spaces/{spaceId}/symptoms")
+  public Object createSymptomEvent(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @Valid @RequestBody CreateSymptomEventRequest request) {
+    return careService.createSymptomEvent(currentUser(httpRequest).id(), spaceId, request);
+  }
+
+  @PatchMapping("/spaces/{spaceId}/symptoms/{symptomId}")
+  public Object updateSymptomEvent(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID symptomId, @Valid @RequestBody UpdateSymptomEventRequest request) {
+    return careService.updateSymptomEvent(currentUser(httpRequest).id(), spaceId, symptomId, request);
+  }
+
+  @DeleteMapping("/spaces/{spaceId}/symptoms/{symptomId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void deleteSymptomEvent(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID symptomId) {
+    careService.deleteSymptomEvent(currentUser(httpRequest).id(), spaceId, symptomId);
   }
 
   @GetMapping("/spaces/{spaceId}/notices")
