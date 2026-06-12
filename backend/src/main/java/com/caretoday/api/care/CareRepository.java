@@ -335,7 +335,7 @@ public class CareRepository {
   public List<BodyRecord> listBodyRecords(UUID spaceId) {
     return jdbcTemplate.query(
         """
-        SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, created_at
+        SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, measured_at, created_at
         FROM body_records
         WHERE space_id = ? AND deleted_at IS NULL
         ORDER BY record_date DESC, created_at DESC
@@ -347,7 +347,7 @@ public class CareRepository {
   public Optional<BodyRecord> findBodyRecord(UUID recordId) {
     return jdbcTemplate.query(
             """
-            SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, created_at
+            SELECT id, space_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, measured_at, created_at
             FROM body_records
             WHERE id = ? AND deleted_at IS NULL
             """,
@@ -362,9 +362,9 @@ public class CareRepository {
     jdbcTemplate.update(
         """
         INSERT INTO body_records (
-          id, space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date
+          id, space_id, user_id, pain_score, fatigue_score, sleep_score, mood_score, appetite_score, temperature, weight, note, record_date, measured_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         id(id),
         id(spaceId),
@@ -377,7 +377,8 @@ public class CareRepository {
         request.temperature(),
         request.weight(),
         request.note(),
-        request.recordDate());
+        request.recordDate(),
+        request.measuredAt() == null ? null : Timestamp.from(request.measuredAt()));
     return findBodyRecord(id).orElseThrow();
   }
 
@@ -950,6 +951,7 @@ public class CareRepository {
         rs.getObject("weight") == null ? null : rs.getDouble("weight"),
         rs.getString("note"),
         rs.getDate("record_date").toLocalDate(),
+        rs.getTimestamp("measured_at") == null ? null : rs.getTimestamp("measured_at").toInstant(),
         toInstant(rs, "created_at"));
   }
 

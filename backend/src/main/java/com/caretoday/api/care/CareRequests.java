@@ -50,7 +50,8 @@ public final class CareRequests {
       @DecimalMin("34.0") @DecimalMax("42.0") Double temperature,
       @DecimalMin("20.0") @DecimalMax("300.0") Double weight,
       String note,
-      @NotNull LocalDate recordDate) {}
+      @NotNull LocalDate recordDate,
+      Instant measuredAt) {}
 
   public record UpdateBodyRecordRequest(
       @Min(0) @Max(10) Integer painScore,
