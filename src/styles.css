@@ -2160,6 +2160,28 @@ textarea {
 
 .notice-row { width: 100%; text-align: left; cursor: pointer; }
 
+.timeline-section-head {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 2px 0 14px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, #f3f8f1, #fff7ee);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.timeline-section-head span {
+  font-family: var(--font-title);
+  font-size: 18px;
+  color: var(--ink);
+}
+.timeline-section-head em {
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--sage);
+}
+
 @media (max-width: 1080px) {
   .app-shell {
     grid-template-columns: 1fr;

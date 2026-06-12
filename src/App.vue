@@ -429,7 +429,12 @@ function go(nextView) {
 watch(view, async (next) => {
   if (next !== 'timeline') return;
   await nextTick();
-  document.getElementById('timeline-today-divider')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  // 有未来安排时停在顶部，先让用户看到「接下来」；否则定位到今天
+  if (timelineFutureItems.value.length) {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } else {
+    document.getElementById('timeline-today-divider')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 });
 
 function isAfterToday(value) {
@@ -1821,6 +1826,10 @@ function mapMember(member) {
 
             <p v-if="!timelineItems.length" class="empty-note">时间线还空着。点右下角「+」记第一笔，所有记录都会按时间在这里排好。</p>
             <div v-else class="timeline-list">
+              <div v-if="timelineFutureItems.length" class="timeline-section-head upcoming">
+                <span>接下来</span>
+                <em>{{ timelineFutureItems.length }} 项即将发生</em>
+              </div>
               <button
                 v-for="item in timelineFutureItems"
                 :key="item.id"
