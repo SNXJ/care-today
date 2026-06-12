@@ -84,6 +84,7 @@ public final class CareModels {
       Double weight,
       String note,
       LocalDate recordDate,
+      Instant measuredAt,
       Instant createdAt) {}
 
   public record SymptomEvent(

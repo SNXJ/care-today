@@ -181,6 +181,47 @@ const recentSymptoms = computed(() => {
 const upcomingEvents = computed(() =>
   events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 );
+function bodyTimeOf(record) {
+  return record.measuredAt || record.createdAt || record.recordDate;
+}
+const latestTempReading = computed(() => bodyRecordItems.value.find((r) => r.temperature !== null && r.temperature !== undefined) || null);
+const latestWeightReading = computed(() => bodyRecordItems.value.find((r) => r.weight !== null && r.weight !== undefined) || null);
+const todayTempReadings = computed(() =>
+  bodyRecordItems.value
+    .filter((r) => r.temperature !== null && r.temperature !== undefined && (r.recordDate === todayKey.value))
+    .map((r) => ({
+      id: r.id,
+      temp: r.temperature,
+      time: new Date(bodyTimeOf(r)).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+      note: r.note || '',
+      sortAt: bodyTimeOf(r),
+    }))
+    .sort((a, b) => new Date(b.sortAt) - new Date(a.sortAt))
+);
+const bodySummary = computed(() => [
+  {
+    label: '最新体温',
+    value: latestTempReading.value ? `${latestTempReading.value.temperature}` : '—',
+    unit: latestTempReading.value ? '℃' : '',
+    sub: latestTempReading.value ? formatFullDateTime(bodyTimeOf(latestTempReading.value)) : '还没记过',
+    accent: 'rose',
+  },
+  {
+    label: '最新体重',
+    value: latestWeightReading.value ? `${latestWeightReading.value.weight}` : '—',
+    unit: latestWeightReading.value ? 'kg' : '',
+    sub: latestWeightReading.value ? formatTimelineDate(bodyTimeOf(latestWeightReading.value)) + ' 记录' : '还没记过',
+    accent: 'blue',
+  },
+  {
+    label: '今日症状',
+    value: `${todaySymptoms.value.length}`,
+    unit: '次',
+    sub: todaySymptoms.value.length ? '点下方查看' : '今天还没有',
+    accent: 'amber',
+  },
+]);
+const manageItem = ref(null);
 const timelineItems = computed(() => {
   const items = [
     ...events.value.map((event) => ({
@@ -255,24 +296,6 @@ const timelineItems = computed(() => {
         { label: '可见范围', value: note.visibility },
         { label: '创建时间', value: formatFullDateTime(note.createdAt) },
         { label: '内容', value: note.content || '资料文本已保存' },
-      ],
-    })),
-    ...symptoms.value.map((symptom) => ({
-      id: `symptom-${symptom.id}`,
-      kind: 'symptom',
-      raw: symptom,
-      type: '症状',
-      title: symptom.tag,
-      meta: symptom.timeLabel,
-      detail: symptom.note || '记录了一次症状发生的时间',
-      at: symptom.happenedAt,
-      icon: iconBody,
-      view: 'body',
-      accent: 'amber',
-      fields: [
-        { label: '症状', value: symptom.tag },
-        { label: '发生时间', value: formatFullDateTime(symptom.happenedAt) },
-        { label: '补充说明', value: symptom.note || '没有补充说明' },
       ],
     })),
     ...notices.value.map(noticeTimelineItem),
@@ -453,6 +476,71 @@ function openTimelineDetail(item) {
 
 function closeDetail() {
   detailItem.value = null;
+}
+
+function openManage(kind, raw) {
+  let descriptor;
+  if (kind === 'notice') {
+    descriptor = {
+      kind,
+      raw,
+      eyebrow: '注意事项',
+      title: raw.content,
+      icon: iconWarning,
+      lines: [
+        { label: '生效期', value: noticeRangeLabel(raw) },
+        { label: '补充说明', value: raw.detail || '没有补充说明' },
+        { label: '状态', value: raw.archived ? '已归档' : '生效中' },
+      ],
+      actions: [
+        { label: raw.important ? '取消重要' : '设为重要', run: () => toggleNoticeImportant(raw) },
+        { label: '编辑', run: () => editNotice(raw) },
+        { label: raw.archived ? '恢复' : '归档', run: () => archiveNotice(raw) },
+        { label: '删除', danger: true, run: () => deleteNotice(raw) },
+      ],
+    };
+  } else if (kind === 'message') {
+    descriptor = {
+      kind,
+      raw,
+      eyebrow: '分享',
+      title: raw.text,
+      icon: iconChat,
+      lines: [{ label: '时间', value: `${raw.author} · ${raw.time}` }],
+      actions: [
+        { label: '编辑', run: () => editMessage(raw) },
+        { label: '删除', danger: true, run: () => deleteMessage(raw) },
+      ],
+    };
+  } else if (kind === 'symptom') {
+    descriptor = {
+      kind,
+      raw,
+      eyebrow: '症状记录',
+      title: raw.tag,
+      icon: iconBody,
+      lines: [
+        { label: '发生时间', value: raw.timeLabel },
+        { label: '补充说明', value: raw.note || '没有补充说明' },
+      ],
+      actions: [
+        { label: '编辑', run: () => editSymptom(raw) },
+        { label: '删除', danger: true, run: () => deleteSymptom(raw) },
+      ],
+    };
+  } else {
+    return;
+  }
+  manageItem.value = descriptor;
+}
+
+function closeManage() {
+  manageItem.value = null;
+}
+
+async function runManageAction(action) {
+  manageItem.value = null;
+  await action.run();
 }
 
 
@@ -702,6 +790,11 @@ function openBodyForm() {
 }
 
 const todayDateKey = () => new Date().toISOString().slice(0, 10);
+const nowLocalInput = () => {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 16);
+};
 
 async function saveStatus() {
   await withLoading(async () => {
@@ -718,10 +811,11 @@ async function openTempDialog() {
   const values = await openFormDialog({
     eyebrow: '体温',
     title: '记一次体温',
-    message: '只记体温，单独成一条，不影响其他指标。',
+    message: '体温常一天测多次，可以选具体时间。',
     icon: iconBody,
     fields: [
-      { name: 'temperature', label: '体温（℃）', value: latestValue('temperature') ?? '', required: true, type: 'number', placeholder: '例如 36.8' },
+      { name: 'temperature', label: '体温（℃）', value: '', required: true, type: 'number', placeholder: '例如 36.8' },
+      { name: 'measuredAt', label: '测量时间', value: nowLocalInput(), type: 'datetime-local' },
       { name: 'note', label: '备注（可不填）', value: '', placeholder: '例如：服药后测的' },
     ],
     confirmText: '记下来',
@@ -732,11 +826,13 @@ async function openTempDialog() {
     showToast('填一个有效的体温');
     return;
   }
+  const when = values.measuredAt ? new Date(values.measuredAt) : new Date();
   await withLoading(async () => {
     await api.createBodyRecord(activeSpaceId.value, {
       temperature,
       note: values.note?.trim() || undefined,
-      recordDate: todayDateKey(),
+      recordDate: when.toISOString().slice(0, 10),
+      measuredAt: when.toISOString(),
     });
     await loadBodyRecords();
     showToast(`已记录体温 ${temperature}℃`);
@@ -747,10 +843,11 @@ async function openWeightDialog() {
   const values = await openFormDialog({
     eyebrow: '体重',
     title: '记一次体重',
-    message: '只记体重，单独成一条，方便看长期变化。',
+    message: '默认记到今天，也可以补记到别的日期。',
     icon: iconBody,
     fields: [
-      { name: 'weight', label: '体重（kg）', value: latestValue('weight') ?? '', required: true, type: 'number', placeholder: '例如 55.5' },
+      { name: 'weight', label: '体重（kg）', value: '', required: true, type: 'number', placeholder: '例如 55.5' },
+      { name: 'recordDate', label: '日期', value: todayDateKey(), type: 'date' },
       { name: 'note', label: '备注（可不填）', value: '', placeholder: '例如：早晨空腹' },
     ],
     confirmText: '记下来',
@@ -765,7 +862,7 @@ async function openWeightDialog() {
     await api.createBodyRecord(activeSpaceId.value, {
       weight,
       note: values.note?.trim() || undefined,
-      recordDate: todayDateKey(),
+      recordDate: values.recordDate || todayDateKey(),
     });
     await loadBodyRecords();
     showToast(`已记录体重 ${weight} kg`);
@@ -1635,6 +1732,23 @@ function mapMember(member) {
 
       <section v-else-if="view === 'today'" class="page-grid">
         <div class="main-stack">
+          <article v-if="activeNotices.length" class="card pinned-notices">
+            <header class="card-header">
+              <div class="card-title">
+                <span class="title-icon amber"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
+                <h2>要注意</h2>
+              </div>
+              <span class="tag">医生叮嘱 · 每天提醒</span>
+            </header>
+            <div class="card-body pinned-list">
+              <button v-for="notice in activeNotices" :key="notice.id" class="pinned-notice" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
+                <strong>{{ notice.content }}</strong>
+                <span v-if="notice.detail">{{ notice.detail }}</span>
+                <small>{{ noticeRangeLabel(notice) }}</small>
+              </button>
+            </div>
+          </article>
+
           <article class="card">
             <header class="card-header">
               <div class="card-title">
@@ -1645,11 +1759,7 @@ function mapMember(member) {
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
-                <button v-for="notice in activeNotices" :key="notice.id" class="notice-strip" :class="{ important: notice.important }" type="button" @click="go('notices')">
-                  <img :src="iconWarning" alt="" aria-hidden="true" />
-                  <span>注意：{{ notice.content }}</span>
-                </button>
-                <p v-if="!todayItems.length && !activeNotices.length" class="empty-note">今天没有安排，休息也很重要。日程和注意事项到了会出现在这里。</p>
+                <p v-if="!todayItems.length" class="empty-note">今天没有日程，好好休息。复诊、检查到了当天会出现在这里。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
                   <div>
@@ -1776,29 +1886,33 @@ function mapMember(member) {
           <div class="card-body">
             <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有分享过。点右下角「+」说说此刻的想法和状态，家人打开就能看到。' : 'TA 还没有发过分享，过两天再来看看。' }}</p>
             <div v-else class="message-list moments-feed">
-              <div v-for="message in messages" :key="message.id" class="message">
+              <component :is="isPatient ? 'button' : 'div'" v-for="message in messages" :key="message.id" class="message" :class="{ tappable: isPatient }" type="button" @click="isPatient && openManage('message', message)">
                 <p>{{ message.text }}</p>
                 <span>{{ message.author }} · {{ message.time }}</span>
-                <div v-if="isPatient" class="row-actions">
-                  <button class="small-btn" type="button" @click="editMessage(message)">编辑</button>
-                  <button class="small-btn danger" type="button" @click="deleteMessage(message)">删除</button>
-                </div>
-              </div>
+              </component>
             </div>
           </div>
         </article>
       </section>
 
       <section v-else-if="view === 'body'" class="single-stack">
+        <div class="body-summary">
+          <div v-for="tile in bodySummary" :key="tile.label" class="summary-tile" :class="`accent-${tile.accent}`">
+            <span class="summary-label">{{ tile.label }}</span>
+            <strong class="summary-value">{{ tile.value }}<em>{{ tile.unit }}</em></strong>
+            <small>{{ tile.sub }}</small>
+          </div>
+        </div>
+
         <article class="card">
           <header class="card-header">
             <div class="card-title">
-              <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
-              <h2>身体变化趋势</h2>
+              <span class="title-icon sage"><img :src="iconBody" alt="" aria-hidden="true" /></span>
+              <h2>变化趋势</h2>
             </div>
-            <div class="trend-period">
-              <button class="small-btn" :class="{ sage: trendDays === 7 }" type="button" @click="trendDays = 7">近 7 天</button>
-              <button class="small-btn" :class="{ sage: trendDays === 30 }" type="button" @click="trendDays = 30">近 30 天</button>
+            <div class="segmented">
+              <button :class="{ active: trendDays === 7 }" type="button" @click="trendDays = 7">7 天</button>
+              <button :class="{ active: trendDays === 30 }" type="button" @click="trendDays = 30">30 天</button>
             </div>
           </header>
           <div class="card-body">
@@ -1814,12 +1928,12 @@ function mapMember(member) {
                 {{ metric }}
               </button>
             </div>
-            <p v-if="trendChart.dots.length < 2" class="empty-note">至少要有两天的记录才能连成线。在这个页面点「+」记身体状态，曲线会自己长出来。</p>
+            <p v-if="trendChart.dots.length < 2" class="empty-note">还需要至少两天的{{ trendMetric }}记录才能连成线。点右下角「+」记一笔，曲线会慢慢长出来。</p>
             <div v-else class="trend-chart">
               <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" preserveAspectRatio="none" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
                 <defs>
                   <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stop-color="rgba(120,146,124,0.26)" />
+                    <stop offset="0%" stop-color="rgba(120,146,124,0.3)" />
                     <stop offset="100%" stop-color="rgba(120,146,124,0)" />
                   </linearGradient>
                 </defs>
@@ -1830,8 +1944,27 @@ function mapMember(member) {
               </svg>
               <div class="trend-legend">
                 <span>{{ trendChart.firstLabel }}</span>
-                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : trendMetric === '体重' ? 'kg' : '分' }}）· 共 {{ trendChart.dots.length }} 天有记录</span>
+                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : trendMetric === '体重' ? 'kg' : '分' }}）· {{ trendChart.dots.length }} 天有记录</span>
                 <span>{{ trendChart.lastLabel }}</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <article v-if="todayTempReadings.length" class="card">
+          <header class="card-header">
+            <div class="card-title">
+              <span class="title-icon rose"><img :src="iconBody" alt="" aria-hidden="true" /></span>
+              <h2>今天的体温</h2>
+            </div>
+            <span class="tag">{{ todayTempReadings.length }} 次</span>
+          </header>
+          <div class="card-body">
+            <div class="temp-readings">
+              <div v-for="reading in todayTempReadings" :key="reading.id" class="temp-reading">
+                <strong>{{ reading.temp }}<em>℃</em></strong>
+                <span>{{ reading.time }}</span>
+                <small v-if="reading.note">{{ reading.note }}</small>
               </div>
             </div>
           </div>
@@ -1840,41 +1973,37 @@ function mapMember(member) {
         <article class="card">
           <header class="card-header">
             <div class="card-title">
-              <img class="icon" :src="iconBody" alt="" aria-hidden="true" />
+              <span class="title-icon amber"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>症状记录</h2>
             </div>
-            <span class="tag">什么时间发生了什么</span>
+            <span class="tag">点一条可编辑</span>
           </header>
           <div class="card-body">
-            <p class="section-hint">大便、发烧这类「某个时间发生的事」记在这里，复诊时医生常会问到次数和时间。</p>
-            <h3 class="symptom-subhead">今天</h3>
-            <p v-if="!todaySymptoms.length" class="empty-note">今天还没有症状记录。在这个页面点「+」选「记症状」，时间会自动带上。</p>
-            <div v-else class="symptom-list">
-              <div v-for="symptom in todaySymptoms" :key="symptom.id" class="symptom-row">
-                <strong class="time">{{ symptom.clock }}</strong>
-                <div>
-                  <strong>{{ symptom.tag }}</strong>
-                  <span v-if="symptom.note">{{ symptom.note }}</span>
-                </div>
-                <div class="row-actions">
-                  <button class="small-btn" type="button" @click="editSymptom(symptom)">编辑</button>
-                  <button class="small-btn danger" type="button" @click="deleteSymptom(symptom)">删除</button>
-                </div>
+            <p v-if="!todaySymptoms.length && !recentSymptoms.length" class="empty-note">还没有症状记录。点右下角「+」选「记症状」，大便、发烧都能记下时间。</p>
+            <template v-if="todaySymptoms.length">
+              <h3 class="symptom-subhead">今天</h3>
+              <div class="symptom-list">
+                <button v-for="symptom in todaySymptoms" :key="symptom.id" class="symptom-row" type="button" @click="openManage('symptom', symptom)">
+                  <strong class="time">{{ symptom.clock }}</strong>
+                  <div>
+                    <strong>{{ symptom.tag }}</strong>
+                    <span v-if="symptom.note">{{ symptom.note }}</span>
+                  </div>
+                  <span class="chevron">›</span>
+                </button>
               </div>
-            </div>
+            </template>
             <template v-if="recentSymptoms.length">
               <h3 class="symptom-subhead">最近 7 天</h3>
               <div class="symptom-list">
-                <div v-for="symptom in recentSymptoms" :key="symptom.id" class="symptom-row past">
+                <button v-for="symptom in recentSymptoms" :key="symptom.id" class="symptom-row past" type="button" @click="openManage('symptom', symptom)">
                   <strong class="time">{{ symptom.timeLabel }}</strong>
                   <div>
                     <strong>{{ symptom.tag }}</strong>
                     <span v-if="symptom.note">{{ symptom.note }}</span>
                   </div>
-                  <div class="row-actions">
-                    <button class="small-btn danger" type="button" @click="deleteSymptom(symptom)">删除</button>
-                  </div>
-                </div>
+                  <span class="chevron">›</span>
+                </button>
               </div>
             </template>
           </div>
@@ -1895,36 +2024,28 @@ function mapMember(member) {
             <span class="tag">生效中的会显示在“今天”</span>
           </header>
           <div class="card-body">
-            <p class="section-hint">医生叮嘱的禁忌都在这里管理：生效中的每天置顶在「今天」页，过期或不再需要的可以归档。</p>
+            <p class="section-hint">点一条可以编辑、归档或删除。生效中的会每天置顶在「今天」页。</p>
             <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。点右下角「+」选「记注意事项」，比如「化疗期间避免生食」。</p>
             <div class="notice-list">
-              <div v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }">
-                <img :src="iconWarning" alt="" aria-hidden="true" />
+              <button v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
+                <span class="title-icon amber sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
                 <div>
                   <strong>{{ notice.content }}</strong>
                   <span>{{ noticeRangeLabel(notice) }}<template v-if="notice.detail"> · {{ notice.detail }}</template></span>
                 </div>
-                <div class="row-actions">
-                  <button class="mark-btn" :class="{ active: notice.important }" type="button" @click="toggleNoticeImportant(notice)">重要</button>
-                  <button class="small-btn" type="button" @click="editNotice(notice)">编辑</button>
-                  <button class="small-btn" type="button" @click="archiveNotice(notice)">归档</button>
-                  <button class="small-btn danger" type="button" @click="deleteNotice(notice)">删除</button>
-                </div>
-              </div>
+                <span class="chevron">›</span>
+              </button>
             </div>
             <div v-if="archivedNotices.length" class="notice-archived">
-              <p class="section-hint">已归档（不再显示在“今天”）</p>
-              <div v-for="notice in archivedNotices" :key="notice.id" class="notice-row archived">
-                <img :src="iconWarning" alt="" aria-hidden="true" />
+              <p class="section-hint">已归档（不再显示在「今天」）</p>
+              <button v-for="notice in archivedNotices" :key="notice.id" class="notice-row archived" type="button" @click="openManage('notice', notice)">
+                <span class="title-icon sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
                 <div>
                   <strong>{{ notice.content }}</strong>
                   <span>{{ noticeRangeLabel(notice) }}</span>
                 </div>
-                <div class="row-actions">
-                  <button class="small-btn" type="button" @click="archiveNotice(notice)">恢复</button>
-                  <button class="small-btn danger" type="button" @click="deleteNotice(notice)">删除</button>
-                </div>
-              </div>
+                <span class="chevron">›</span>
+              </button>
             </div>
           </div>
         </article>
@@ -2039,6 +2160,37 @@ function mapMember(member) {
         <div class="confirm-actions">
           <button class="small-btn" type="button" @click="symptomFormOpen = false">取消</button>
           <button class="small-btn sage" type="button" :disabled="loading" @click="addSymptom">记下来</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="manageItem" class="modal-backdrop" role="presentation" @click.self="closeManage">
+      <section class="confirm-dialog manage-dialog" role="dialog" aria-modal="true" aria-labelledby="manage-title">
+        <div class="confirm-icon">
+          <img :src="manageItem.icon" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">{{ manageItem.eyebrow }}</p>
+          <h2 id="manage-title">{{ manageItem.title }}</h2>
+          <dl class="detail-fields">
+            <div v-for="line in manageItem.lines" :key="line.label">
+              <dt>{{ line.label }}</dt>
+              <dd>{{ line.value }}</dd>
+            </div>
+          </dl>
+        </div>
+        <div class="manage-actions">
+          <button
+            v-for="action in manageItem.actions"
+            :key="action.label"
+            class="small-btn"
+            :class="{ danger: action.danger, sage: !action.danger }"
+            type="button"
+            @click="runManageAction(action)"
+          >
+            {{ action.label }}
+          </button>
+          <button class="small-btn" type="button" @click="closeManage">关闭</button>
         </div>
       </section>
     </div>
