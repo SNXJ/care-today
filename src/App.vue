@@ -15,7 +15,7 @@ import iconWarning from './assets/icons/status-warning.svg';
 import iconLock from './assets/icons/status-lock.svg';
 
 const disclaimer =
-  '本工具仅用于生活陪伴、就诊整理和家庭协作，不提供医疗诊断、治疗建议或用药判断。涉及治疗方案、用药调整和症状处理，请以主治医生或医院意见为准。';
+  '仅用于陪伴协作和就诊整理；诊断、用药和治疗以医生意见为准。';
 
 const navItems = [
   { id: 'today', label: '今天', icon: iconToday },
@@ -69,12 +69,15 @@ const membersOpen = ref(false);
 const currentRole = ref(localStorage.getItem('care-today-role') || '');
 const trendMetric = ref('疼痛');
 const trendDays = ref(7);
+const symptomFilter = ref('全部');
 const bodyFormOpen = ref(false);
 const symptomFormOpen = ref(false);
 const symptomPresets = ['大便', '腹泻', '发烧', '乏力', '疼痛', '手脚发麻'];
 const symptomDraft = ref({ tag: '', customTag: '', happenedAt: '', note: '' });
 const symptoms = ref([]);
 const detailItem = ref(null);
+const detailEditing = ref(false);
+const detailEditValues = ref({});
 const invitePhone = ref('');
 const privacyAccepted = ref(false);
 const api = createApi(() => token.value);
@@ -106,29 +109,6 @@ const notices = ref([]);
 const members = ref([]);
 
 const activeNav = computed(() => navItems.find((item) => item.id === view.value));
-const heroCopy = {
-  today: {
-    title: '今天先照顾好这一件事',
-    lead: '只看今天要做的事，别的先放一边。复诊、检查到了当天会出现在这里。',
-  },
-  timeline: {
-    title: '一起走过的每一天',
-    lead: '过去和未来都按时间排在这里：往上看接下来的计划，往下看已经发生的事。',
-  },
-  moments: {
-    title: '此刻的想法和状态',
-    lead: '记下今天的心情和身体感受，家人朋友打开就能看到，不用一遍遍解释。',
-  },
-  body: {
-    title: '身体的变化看得见',
-    lead: '评分、体温、体重的趋势，加上症状发生的时间，复诊时一目了然。',
-  },
-  notices: {
-    title: '医生叮嘱别忘记',
-    lead: '生活禁忌和注意事项记在这里，生效期间每天在「今天」置顶提醒。',
-  },
-};
-const activeHero = computed(() => heroCopy[view.value] || heroCopy.today);
 const isAuthed = computed(() => Boolean(token.value && currentUser.value));
 const hasSpace = computed(() => Boolean(activeSpaceId.value));
 const todayKey = computed(() => toDateKey(new Date()));
@@ -178,6 +158,15 @@ const recentSymptoms = computed(() => {
     (symptom) => symptom.dateKey !== todayKey.value && new Date(symptom.happenedAt) >= cutoff
   );
 });
+const symptomFilterOptions = computed(() => {
+  const tags = Array.from(new Set(symptoms.value.map((symptom) => symptom.tag).filter(Boolean)));
+  return ['全部', ...tags.sort((a, b) => a.localeCompare(b, 'zh-CN'))];
+});
+const filterSymptoms = (items) => (
+  symptomFilter.value === '全部' ? items : items.filter((symptom) => symptom.tag === symptomFilter.value)
+);
+const filteredTodaySymptoms = computed(() => filterSymptoms(todaySymptoms.value));
+const filteredRecentSymptoms = computed(() => filterSymptoms(recentSymptoms.value));
 const upcomingEvents = computed(() =>
   events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 );
@@ -191,6 +180,7 @@ const todayTempReadings = computed(() =>
     .filter((r) => r.temperature !== null && r.temperature !== undefined && (r.recordDate === todayKey.value))
     .map((r) => ({
       id: r.id,
+      raw: r,
       temp: r.temperature,
       time: new Date(bodyTimeOf(r)).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
       note: r.note || '',
@@ -205,13 +195,17 @@ const bodySummary = computed(() => [
     unit: latestTempReading.value ? '℃' : '',
     sub: latestTempReading.value ? formatFullDateTime(bodyTimeOf(latestTempReading.value)) : '还没记过',
     accent: 'rose',
+    kind: 'temperature',
+    record: latestTempReading.value,
   },
   {
     label: '最新体重',
     value: latestWeightReading.value ? `${latestWeightReading.value.weight}` : '—',
     unit: latestWeightReading.value ? 'kg' : '',
     sub: latestWeightReading.value ? formatTimelineDate(bodyTimeOf(latestWeightReading.value)) + ' 记录' : '还没记过',
-    accent: 'blue',
+    accent: 'gold',
+    kind: 'weight',
+    record: latestWeightReading.value,
   },
   {
     label: '今日症状',
@@ -219,6 +213,8 @@ const bodySummary = computed(() => [
     unit: '次',
     sub: todaySymptoms.value.length ? '点下方查看' : '今天还没有',
     accent: 'amber',
+    kind: 'symptoms',
+    record: null,
   },
 ]);
 const manageItem = ref(null);
@@ -332,9 +328,38 @@ const trendMetricFields = {
   体温: 'temperature',
   体重: 'weight',
 };
+const scoreLabels = Object.keys(scoreFieldByLabel);
+const measureMetrics = new Set(['体温', '体重']);
 const trendPoints = computed(() => {
   const field = trendMetricFields[trendMetric.value];
-  // bodyRecordItems is sorted newest-first; keep the latest non-null value per day for this metric
+  const isMeasure = measureMetrics.has(trendMetric.value);
+  if (isMeasure) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - trendDays.value);
+    return bodyRecordItems.value
+      .map((record) => {
+        const raw = record[field];
+        const at = bodyTimeOf(record);
+        const date = new Date(at);
+        if (raw === null || raw === undefined || raw === '' || Number.isNaN(date.getTime()) || date < cutoff) {
+          return null;
+        }
+        const value = Number(raw);
+        return Number.isNaN(value)
+          ? null
+          : {
+              key: `${record.id}-${field}`,
+              at: date,
+              label: formatChartTime(date, trendMetric.value === '体温'),
+              value,
+            };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.at - b.at)
+      .map((point, index) => ({ ...point, index }));
+  }
+
+  // bodyRecordItems is sorted newest-first; keep the latest non-null value per day for score metrics.
   const byDay = new Map();
   for (const record of bodyRecordItems.value) {
     const raw = record[field];
@@ -361,45 +386,103 @@ const trendPoints = computed(() => {
   return points;
 });
 const trendChart = computed(() => {
-  const width = 320;
-  const height = 120;
-  const padX = 12;
-  const padY = 14;
   const points = trendPoints.value;
+  const width = Math.max(360, points.length * 30 + 54);
+  const height = 190;
+  const padLeft = 40;
+  const padRight = 14;
+  const padTop = 14;
+  const padBottom = 46;
   const values = points.filter((point) => point.value !== null).map((point) => point.value);
   let min = 0;
   let max = 10;
+  let yTicks = [0, 2, 4, 6, 8, 10];
   if (trendMetric.value === '体温') {
     min = 34;
     max = 42;
+    yTicks = [34, 36, 38, 40, 42];
   } else if (trendMetric.value === '体重') {
-    min = values.length ? Math.floor(Math.min(...values)) - 1 : 0;
-    max = values.length ? Math.ceil(Math.max(...values)) + 1 : 10;
+    const low = values.length ? Math.floor(Math.min(...values)) - 1 : 40;
+    const high = values.length ? Math.ceil(Math.max(...values)) + 1 : 80;
+    min = low === high ? low - 1 : low;
+    max = low === high ? high + 1 : high;
+    yTicks = buildNumericTicks(min, max, 5);
   }
-  const step = points.length > 1 ? (width - padX * 2) / (points.length - 1) : 0;
+  if (max <= min) {
+    max = min + 1;
+  }
+  const plotWidth = width - padLeft - padRight;
+  const plotHeight = height - padTop - padBottom;
+  const step = points.length > 1 ? plotWidth / (points.length - 1) : 0;
+  const pointX = (point) => padLeft + (points.length > 1 ? point.index * step : plotWidth / 2);
+  const pointY = (value) => padTop + (1 - (value - min) / (max - min)) * plotHeight;
   const dots = points
     .filter((point) => point.value !== null)
     .map((point) => ({
       ...point,
-      x: padX + point.index * step,
-      y: height - padY - ((point.value - min) / (max - min)) * (height - padY * 2),
+      x: pointX(point),
+      y: pointY(point.value),
+      valueLabel: formatChartValue(point.value, trendMetric.value),
     }));
-  const baseY = height - padY;
-  const area = dots.length
+  const baseY = height - padBottom;
+  const area = dots.length > 1
     ? `${dots[0].x.toFixed(1)},${baseY} ` + dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' ') + ` ${dots[dots.length - 1].x.toFixed(1)},${baseY}`
     : '';
+  const xTicks = points.map((point) => ({
+    key: point.key,
+    x: pointX(point),
+    y1: padTop,
+    y2: baseY,
+    label: point.label,
+  }));
+  const resolvedYTicks = yTicks.map((tick) => ({
+    key: tick,
+    value: tick,
+    label: formatTickValue(tick),
+    y: pointY(tick),
+  }));
   return {
     width,
     height,
+    padLeft,
+    padRight,
+    padTop,
+    padBottom,
+    baseY,
+    chartRight: width - padRight,
     min,
     max,
+    unit: trendMetric.value === '体温' ? '℃' : trendMetric.value === '体重' ? 'kg' : '分',
     dots,
     line: dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' '),
     area,
+    xTicks,
+    yTicks: resolvedYTicks,
     firstLabel: points[0]?.label || '',
     lastLabel: points[points.length - 1]?.label || '',
+    rangeLabel: values.length ? `${formatTickValue(min)}–${formatTickValue(max)}` : '暂无数据',
+    countLabel: measureMetrics.has(trendMetric.value) ? `${dots.length} 次记录` : `${dots.length} 天有记录`,
   };
 });
+
+const scoreRecordRows = computed(() =>
+  bodyRecordItems.value
+    .map((record) => {
+      const scores = scoreLabels
+        .map((label) => ({ label, value: record[scoreFieldByLabel[label]] }))
+        .filter((item) => item.value !== null && item.value !== undefined && item.value !== '');
+      if (!scores.length) return null;
+      return {
+        id: record.id,
+        date: formatTimelineDate(record.createdAt || record.recordDate),
+        time: formatTimelineTime(record.createdAt || record.recordDate),
+        scores,
+        note: record.note || '',
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 8)
+);
 
 onMounted(() => {
   const invite = new URLSearchParams(window.location.search).get('invite');
@@ -476,11 +559,146 @@ function noticeRangeLabel(notice) {
 
 function openTimelineDetail(item) {
   detailItem.value = item;
+  detailEditing.value = false;
+  detailEditValues.value = {};
 }
 
+const detailEditors = {
+  event: editEvent,
+  question: editQuestion,
+  message: editMessage,
+  note: editNote,
+  notice: editNotice,
+};
+
+const detailEditable = computed(() => Boolean(detailItem.value && detailEditors[detailItem.value.kind]));
+const detailEditFields = computed(() => buildDetailEditFields(detailItem.value));
+
+async function editFromDetail() {
+  const item = detailItem.value;
+  if (!item) return;
+  const editor = detailEditors[item.kind];
+  if (!editor) return;
+  detailItem.value = null;
+  await editor(item.raw);
+}
+
+function beginDetailEdit() {
+  const fields = detailEditFields.value;
+  detailEditValues.value = Object.fromEntries(fields.map((field) => [field.name, field.value ?? '']));
+  detailEditing.value = true;
+}
+
+function cancelDetailEdit() {
+  detailEditing.value = false;
+  detailEditValues.value = {};
+}
+
+function buildDetailEditFields(item) {
+  if (!item) return [];
+  const raw = item.raw;
+  if (item.kind === 'event') {
+    return [
+      { name: 'title', label: '标题', value: raw.title, required: true },
+      { name: 'scheduledAt', label: '时间', value: toLocalInputDateTime(raw.scheduledAt), required: true, type: 'datetime-local' },
+      { name: 'location', label: '地点', value: raw.location || '' },
+      { name: 'note', label: '备注', value: raw.note || '', type: 'textarea', rows: 2 },
+      { name: 'needsCompanion', label: '需要陪同', value: Boolean(raw.needsCompanion), type: 'checkbox' },
+    ];
+  }
+  if (item.kind === 'question') {
+    return [
+      { name: 'text', label: '问题', value: raw.text, required: true, type: 'textarea', rows: 2 },
+      { name: 'answer', label: '答复', value: raw.answer || '', type: 'textarea', rows: 2 },
+      { name: 'important', label: '重点问题', value: Boolean(raw.important), type: 'checkbox' },
+      { name: 'done', label: '已问过', value: Boolean(raw.done), type: 'checkbox' },
+    ];
+  }
+  if (item.kind === 'message') {
+    return [{ name: 'text', label: '内容', value: raw.text, required: true, type: 'textarea', rows: 3 }];
+  }
+  if (item.kind === 'note') {
+    return [
+      { name: 'title', label: '标题', value: raw.title, required: true },
+      { name: 'content', label: '内容', value: raw.content || '', type: 'textarea', rows: 3 },
+    ];
+  }
+  if (item.kind === 'notice') {
+    return [
+      { name: 'content', label: '内容', value: raw.content, required: true, type: 'textarea', rows: 2 },
+      { name: 'detail', label: '补充', value: raw.detail || '', type: 'textarea', rows: 2 },
+      { name: 'startsOn', label: '开始', value: raw.startsOn || '', type: 'date' },
+      { name: 'endsOn', label: '结束', value: raw.endsOn || '', type: 'date' },
+      { name: 'important', label: '重要', value: Boolean(raw.important), type: 'checkbox' },
+    ];
+  }
+  return [];
+}
+
+async function saveDetailEdit() {
+  const item = detailItem.value;
+  if (!item) return;
+  for (const field of detailEditFields.value) {
+    if (field.required && !String(detailEditValues.value[field.name] || '').trim()) {
+      showToast(`请填写${field.label}`);
+      return;
+    }
+  }
+  const values = { ...detailEditValues.value };
+  await withLoading(async () => {
+    if (item.kind === 'event') {
+      const scheduledAt = new Date(values.scheduledAt);
+      if (Number.isNaN(scheduledAt.getTime())) {
+        showToast('请选择有效的日程时间');
+        return;
+      }
+      await api.updateEvent(activeSpaceId.value, item.raw.id, {
+        title: values.title.trim(),
+        scheduledAt: scheduledAt.toISOString(),
+        location: values.location?.trim() || '',
+        note: values.note?.trim() || '',
+        needsCompanion: Boolean(values.needsCompanion),
+      });
+      await loadEvents();
+    } else if (item.kind === 'question') {
+      await api.updateDoctorQuestion(activeSpaceId.value, item.raw.id, {
+        question: values.text.trim(),
+        doctorAnswer: values.answer ?? '',
+        important: Boolean(values.important),
+        asked: Boolean(values.done),
+      });
+      await loadQuestions();
+    } else if (item.kind === 'message') {
+      await api.updateMessage(activeSpaceId.value, item.raw.id, { text: values.text.trim() });
+      await loadMessages();
+    } else if (item.kind === 'note') {
+      await api.updateNote(activeSpaceId.value, item.raw.id, {
+        title: values.title.trim(),
+        content: values.content ?? '',
+      });
+      await loadNotes();
+    } else if (item.kind === 'notice') {
+      await api.updateNotice(activeSpaceId.value, item.raw.id, {
+        content: values.content.trim(),
+        detail: values.detail ?? '',
+        startsOn: values.startsOn || null,
+        endsOn: values.endsOn || null,
+        important: Boolean(values.important),
+      });
+      await loadNotices();
+    }
+    const updated = timelineItems.value.find((candidate) => candidate.id === item.id);
+    detailItem.value = updated || null;
+    detailEditing.value = false;
+    detailEditValues.value = {};
+    showToast('已更新');
+  });
+}
 
 function closeDetail() {
   detailItem.value = null;
+  detailEditing.value = false;
+  detailEditValues.value = {};
 }
 
 function openManage(kind, raw) {
@@ -801,6 +1019,13 @@ const nowLocalInput = () => {
   return d.toISOString().slice(0, 16);
 };
 
+function toLocalInputDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 16);
+}
+
 async function saveStatus() {
   await withLoading(async () => {
     const result = await api.createBodyRecord(activeSpaceId.value, bodyRecordPayload.value);
@@ -871,6 +1096,57 @@ async function openWeightDialog() {
     });
     await loadBodyRecords();
     showToast(`已记录体重 ${weight} kg`);
+  });
+}
+
+async function editBodyMeasure(record, kind) {
+  if (!record) return;
+  const temperatureMode = kind === 'temperature';
+  const values = await openFormDialog({
+    eyebrow: temperatureMode ? '体温' : '体重',
+    title: temperatureMode ? '修改体温' : '修改体重',
+    icon: iconBody,
+    fields: temperatureMode
+      ? [
+          { name: 'temperature', label: '体温（℃）', value: record.temperature ?? '', required: true, type: 'number' },
+          { name: 'measuredAt', label: '测量时间', value: toLocalInputDateTime(bodyTimeOf(record)), type: 'datetime-local' },
+          { name: 'note', label: '备注', value: record.note || '' },
+        ]
+      : [
+          { name: 'weight', label: '体重（kg）', value: record.weight ?? '', required: true, type: 'number' },
+          { name: 'recordDate', label: '日期', value: record.recordDate || todayDateKey(), type: 'date' },
+          { name: 'note', label: '备注', value: record.note || '' },
+        ],
+    confirmText: '保存修改',
+  });
+  if (!values) return;
+  const amount = Number(temperatureMode ? values.temperature : values.weight);
+  if (Number.isNaN(amount)) {
+    showToast(temperatureMode ? '填一个有效的体温' : '填一个有效的体重');
+    return;
+  }
+  await withLoading(async () => {
+    if (temperatureMode) {
+      const measuredAt = values.measuredAt ? new Date(values.measuredAt) : new Date(bodyTimeOf(record));
+      if (Number.isNaN(measuredAt.getTime())) {
+        showToast('请选择有效的测量时间');
+        return;
+      }
+      await api.updateBodyRecord(activeSpaceId.value, record.id, {
+        temperature: amount,
+        measuredAt: measuredAt.toISOString(),
+        recordDate: toDateKey(measuredAt),
+        note: values.note?.trim() || '',
+      });
+    } else {
+      await api.updateBodyRecord(activeSpaceId.value, record.id, {
+        weight: amount,
+        recordDate: values.recordDate || record.recordDate || todayDateKey(),
+        note: values.note?.trim() || '',
+      });
+    }
+    await loadBodyRecords();
+    showToast(temperatureMode ? '体温已更新' : '体重已更新');
   });
 }
 
@@ -992,16 +1268,25 @@ async function editEvent(event) {
     icon: iconCalendar,
     fields: [
       { name: 'title', label: '日程标题', value: event.title, required: true },
+      { name: 'scheduledAt', label: '时间', value: toLocalInputDateTime(event.scheduledAt), required: true, type: 'datetime-local' },
       { name: 'location', label: '地点', value: event.location || '' },
       { name: 'note', label: '备注', value: event.note || '', type: 'textarea' },
+      { name: 'needsCompanion', label: '需要陪同', value: Boolean(event.needsCompanion), type: 'checkbox' },
     ],
   });
   if (!values) return;
+  const scheduledAt = new Date(values.scheduledAt);
+  if (Number.isNaN(scheduledAt.getTime())) {
+    showToast('请选择有效的日程时间');
+    return;
+  }
   await withLoading(async () => {
     await api.updateEvent(activeSpaceId.value, event.id, {
       title: values.title.trim(),
+      scheduledAt: scheduledAt.toISOString(),
       location: values.location?.trim() || '',
       note: values.note?.trim() || '',
+      needsCompanion: Boolean(values.needsCompanion),
     });
     await loadEvents();
     showToast('日程已更新');
@@ -1078,15 +1363,15 @@ async function toggleQuestionAsked(question) {
 }
 
 const composerActions = [
-  { id: 'message', label: '说说此刻', desc: '发一条分享，家人朋友都能看到', icon: iconChat, patientOnly: true, bodyRelated: false },
-  { id: 'event', label: '加日程', desc: '复诊、检查、取报告、用药提醒', icon: iconCalendar, bodyRelated: false },
-  { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、乏力、睡眠等评分', icon: iconBody, bodyRelated: true },
-  { id: 'temperature', label: '记体温', desc: '单独记一次体温', icon: iconBody, bodyRelated: true },
-  { id: 'weight', label: '记体重', desc: '单独记一次体重', icon: iconBody, bodyRelated: true },
-  { id: 'symptom', label: '记症状', desc: '大便、发烧…记下发生时间', icon: iconBody, bodyRelated: true },
-  { id: 'notice', label: '记注意事项', desc: '医生叮嘱的禁忌，每天置顶提醒', icon: iconWarning, bodyRelated: false },
-  { id: 'question', label: '问医生的问题', desc: '攒到复诊时一条条问', icon: iconDoctor, bodyRelated: false },
-  { id: 'note', label: '存一条资料', desc: '化验单、用药、医嘱先存成文字', icon: iconFolder, bodyRelated: false },
+  { id: 'message', label: '说说此刻', desc: '发布给家人看', icon: iconChat, patientOnly: true, bodyRelated: false },
+  { id: 'event', label: '加日程', desc: '复诊、检查、提醒', icon: iconCalendar, bodyRelated: false },
+  { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、睡眠等评分', icon: iconBody, bodyRelated: true },
+  { id: 'temperature', label: '记体温', desc: '测量时间和数值', icon: iconBody, bodyRelated: true },
+  { id: 'weight', label: '记体重', desc: '日期和数值', icon: iconBody, bodyRelated: true },
+  { id: 'symptom', label: '记症状', desc: '症状和发生时间', icon: iconBody, bodyRelated: true },
+  { id: 'notice', label: '记注意事项', desc: '有效期内置顶', icon: iconWarning, bodyRelated: false },
+  { id: 'question', label: '问医生的问题', desc: '复诊前确认', icon: iconDoctor, bodyRelated: false },
+  { id: 'note', label: '存一条资料', desc: '报告、用药、医嘱', icon: iconFolder, bodyRelated: false },
 ];
 
 const composerScope = {
@@ -1609,6 +1894,31 @@ function formatFullDateTime(value) {
   return date.toLocaleString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatChartTime(value, includeTime = false) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const options = includeTime
+    ? { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+    : { month: 'numeric', day: 'numeric' };
+  return date.toLocaleString('zh-CN', options);
+}
+
+function formatChartValue(value, metric) {
+  if (metric === '体温') return Number(value).toFixed(1);
+  if (metric === '体重') return Number(value).toFixed(1).replace(/\.0$/, '');
+  return String(Math.round(Number(value)));
+}
+
+function formatTickValue(value) {
+  return Number.isInteger(value) ? String(value) : Number(value).toFixed(1).replace(/\.0$/, '');
+}
+
+function buildNumericTicks(min, max, count) {
+  if (count <= 1 || max <= min) return [min, max];
+  const step = (max - min) / (count - 1);
+  return Array.from({ length: count }, (_, index) => Number((min + step * index).toFixed(1)));
+}
+
 function mapMember(member) {
   const roleMap = {
     PATIENT_ADMIN: '患者/管理员',
@@ -1667,9 +1977,7 @@ function mapMember(member) {
     <main>
       <section class="topbar">
         <div>
-          <p class="eyebrow">{{ activeNav?.label || '今天' }}</p>
-          <h1>{{ activeHero.title }}</h1>
-          <p class="lead">{{ activeHero.lead }}</p>
+          <h1>{{ activeNav?.label || '今天' }}</h1>
         </div>
         <div class="top-actions">
           <div class="privacy-pill">
@@ -1688,7 +1996,7 @@ function mapMember(member) {
               <img class="icon" :src="iconLock" alt="" aria-hidden="true" />
               <h2>{{ authMode === 'login' ? '登录陪伴空间' : '注册账号' }}</h2>
             </div>
-            <span class="tag">数据写入后端数据库</span>
+            <span class="tag">后端保存</span>
           </header>
           <div class="card-body">
             <div class="auth-grid">
@@ -1726,7 +2034,7 @@ function mapMember(member) {
             </div>
             <label class="consent-row">
               <input v-model="privacyAccepted" type="checkbox" />
-              <span>我已了解这里会收集日程、身体记录、问题清单、任务、留言和资料文本，用于就诊整理和家庭协作。</span>
+              <span>我了解这里会保存日程、身体记录、问题、分享和资料，用于就诊整理和家庭协作。</span>
             </label>
             <div class="form-row">
               <button class="small-btn sage" type="button" :disabled="!privacyAccepted || loading" @click="createSpace">创建空间</button>
@@ -1743,7 +2051,7 @@ function mapMember(member) {
                 <span class="title-icon amber"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
                 <h2>要注意</h2>
               </div>
-              <span class="tag">医生叮嘱 · 每天提醒</span>
+              <span class="tag">有效期内置顶</span>
             </header>
             <div class="card-body pinned-list">
               <button v-for="notice in activeNotices" :key="notice.id" class="pinned-notice" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
@@ -1764,7 +2072,7 @@ function mapMember(member) {
             </header>
             <div class="card-body today-grid">
               <div class="schedule">
-                <p v-if="!todayItems.length" class="empty-note">今天没有日程，好好休息。复诊、检查到了当天会出现在这里。</p>
+                <p v-if="!todayItems.length" class="empty-note">今天没有日程。</p>
                 <div v-for="item in todayItems" :key="item.id" class="schedule-row">
                   <strong class="time">{{ item.time }}</strong>
                   <div>
@@ -1777,7 +2085,7 @@ function mapMember(member) {
               <div class="countdown">
                 <span>距离下次复诊</span>
                 <strong>{{ nextVisitCountdown === null ? '—' : nextVisitCountdown }}</strong>
-                <small>{{ nextVisitCountdown === null ? '还没有安排日程，点右下角「+」添加复诊或检查。' : nextVisitCountdown === 0 ? '就是今天，把资料和问题清单带上。' : '把资料和问题提前整理好，不用临时回忆。' }}</small>
+                <small>{{ nextVisitCountdown === null ? '还没有安排日程。' : nextVisitCountdown === 0 ? '今天，把资料和问题带上。' : '提前整理资料和问题。' }}</small>
                 <button class="small-btn" type="button" @click="questionsOpen = true">问题清单</button>
                 <button class="small-btn" type="button" @click="folderOpen = true">复诊资料</button>
               </div>
@@ -1796,9 +2104,9 @@ function mapMember(member) {
             </header>
             <div class="card-body">
               <ul class="compact-list">
-                <li>持续发热、寒战或明显感染迹象。</li>
+                <li>持续发热、寒战或感染迹象。</li>
                 <li>严重疼痛、呼吸困难、胸闷或晕厥。</li>
-                <li>伤口红肿渗液、明显过敏或用药后不适加重。</li>
+                <li>过敏、伤口异常或用药后不适加重。</li>
               </ul>
             </div>
           </article>
@@ -1816,15 +2124,7 @@ function mapMember(member) {
             <span class="tag">{{ timelineItems.length ? `共 ${timelineItems.length} 条` : '暂无动态' }}</span>
           </header>
           <div class="card-body">
-            <div class="timeline-summary">
-              <div>
-                <span class="calendar-kicker">过去和未来都在这里</span>
-                <strong>{{ activeSpace?.patientNickname || currentUser.nickname }} 的照护动态</strong>
-                <p>日程、身体记录、症状、问题清单、注意事项、分享和资料都会按时间汇总在这里。往上看接下来的计划，往下看已经发生的事，点开任何一条能看详情、改内容。</p>
-              </div>
-            </div>
-
-            <p v-if="!timelineItems.length" class="empty-note">时间线还空着。点右下角「+」记第一笔，所有记录都会按时间在这里排好。</p>
+            <p v-if="!timelineItems.length" class="empty-note">还没有记录。点右下角「+」添加第一条。</p>
             <div v-else class="timeline-list">
               <div v-if="timelineFutureItems.length" class="timeline-section-head upcoming">
                 <span>接下来</span>
@@ -1890,10 +2190,10 @@ function mapMember(member) {
               <img class="icon" :src="iconChat" alt="" aria-hidden="true" />
               <h2>分享</h2>
             </div>
-            <span class="tag">{{ isPatient ? '在「+」里点「说说此刻」发布' : '只有患者本人可以发布' }}</span>
+            <span class="tag">{{ isPatient ? '患者发布' : '仅患者可发布' }}</span>
           </header>
           <div class="card-body">
-            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有分享过。点右下角「+」说说此刻的想法和状态，家人打开就能看到。' : 'TA 还没有发过分享，过两天再来看看。' }}</p>
+            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有分享。点右下角「+」发布近况。' : 'TA 还没有发过分享。' }}</p>
             <div v-else class="message-list moments-feed">
               <component :is="isPatient ? 'button' : 'div'" v-for="message in messages" :key="message.id" class="message" :class="{ tappable: isPatient }" type="button" @click="isPatient && openManage('message', message)">
                 <p>{{ message.text }}</p>
@@ -1906,11 +2206,19 @@ function mapMember(member) {
 
       <section v-else-if="view === 'body'" class="single-stack">
         <div class="body-summary">
-          <div v-for="tile in bodySummary" :key="tile.label" class="summary-tile" :class="`accent-${tile.accent}`">
+          <button
+            v-for="tile in bodySummary"
+            :key="tile.label"
+            class="summary-tile"
+            :class="[`accent-${tile.accent}`, { editable: tile.record }]"
+            type="button"
+            :aria-disabled="!tile.record"
+            @click="tile.record && editBodyMeasure(tile.record, tile.kind)"
+          >
             <span class="summary-label">{{ tile.label }}</span>
             <strong class="summary-value">{{ tile.value }}<em>{{ tile.unit }}</em></strong>
             <small>{{ tile.sub }}</small>
-          </div>
+          </button>
         </div>
 
         <article class="card">
@@ -1937,23 +2245,39 @@ function mapMember(member) {
                 {{ metric }}
               </button>
             </div>
-            <p v-if="trendChart.dots.length < 2" class="empty-note">还需要至少两天的{{ trendMetric }}记录才能连成线。点右下角「+」记一笔，曲线会慢慢长出来。</p>
+            <p v-if="!trendChart.dots.length" class="empty-note">最近{{ trendDays }}天还没有{{ trendMetric }}记录。</p>
             <div v-else class="trend-chart">
-              <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" preserveAspectRatio="none" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
+              <svg :viewBox="`0 0 ${trendChart.width} ${trendChart.height}`" :style="{ minWidth: `${trendChart.width}px` }" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`${trendMetric}最近${trendDays}天趋势`">
                 <defs>
                   <linearGradient id="trend-fill" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stop-color="rgba(120,146,124,0.3)" />
                     <stop offset="100%" stop-color="rgba(120,146,124,0)" />
                   </linearGradient>
                 </defs>
-                <line :x1="12" :y1="trendChart.height - 14" :x2="trendChart.width - 12" :y2="trendChart.height - 14" class="trend-axis" />
+                <g class="trend-y-grid">
+                  <template v-for="tick in trendChart.yTicks" :key="tick.key">
+                    <line :x1="trendChart.padLeft" :y1="tick.y" :x2="trendChart.chartRight" :y2="tick.y" class="trend-grid" />
+                    <text :x="trendChart.padLeft - 8" :y="tick.y + 4" text-anchor="end" class="trend-tick-label">{{ tick.label }}</text>
+                  </template>
+                </g>
+                <g class="trend-x-grid">
+                  <template v-for="tick in trendChart.xTicks" :key="tick.key">
+                    <line :x1="tick.x" :y1="tick.y1" :x2="tick.x" :y2="tick.y2" class="trend-grid vertical" />
+                    <text :x="tick.x" :y="trendChart.height - 18" text-anchor="middle" class="trend-tick-label trend-x-label">{{ tick.label }}</text>
+                  </template>
+                </g>
+                <line :x1="trendChart.padLeft" :y1="trendChart.baseY" :x2="trendChart.chartRight" :y2="trendChart.baseY" class="trend-axis" />
+                <line :x1="trendChart.padLeft" :y1="trendChart.padTop" :x2="trendChart.padLeft" :y2="trendChart.baseY" class="trend-axis" />
                 <polygon v-if="trendChart.area" :points="trendChart.area" class="trend-area" />
-                <polyline :points="trendChart.line" class="trend-line" />
-                <circle v-for="dot in trendChart.dots" :key="dot.key" :cx="dot.x" :cy="dot.y" r="3.2" class="trend-dot" />
+                <polyline v-if="trendChart.dots.length > 1" :points="trendChart.line" class="trend-line" />
+                <g v-for="dot in trendChart.dots" :key="dot.key" class="trend-point">
+                  <circle :cx="dot.x" :cy="dot.y" r="3.2" class="trend-dot" />
+                  <text :x="dot.x" :y="dot.y - 7" text-anchor="middle" class="trend-value-label">{{ dot.valueLabel }}</text>
+                </g>
               </svg>
               <div class="trend-legend">
                 <span>{{ trendChart.firstLabel }}</span>
-                <span>{{ trendMetric }}（{{ trendChart.min }}–{{ trendChart.max }}{{ trendMetric === '体温' ? '℃' : trendMetric === '体重' ? 'kg' : '分' }}）· {{ trendChart.dots.length }} 天有记录</span>
+                <span>{{ trendMetric }}（{{ trendChart.rangeLabel }}{{ trendChart.unit }}）· {{ trendChart.countLabel }}</span>
                 <span>{{ trendChart.lastLabel }}</span>
               </div>
             </div>
@@ -1970,11 +2294,11 @@ function mapMember(member) {
           </header>
           <div class="card-body">
             <div class="temp-readings">
-              <div v-for="reading in todayTempReadings" :key="reading.id" class="temp-reading">
+              <button v-for="reading in todayTempReadings" :key="reading.id" class="temp-reading" type="button" @click="editBodyMeasure(reading.raw, 'temperature')">
                 <strong>{{ reading.temp }}<em>℃</em></strong>
                 <span>{{ reading.time }}</span>
                 <small v-if="reading.note">{{ reading.note }}</small>
-              </div>
+              </button>
             </div>
           </div>
         </article>
@@ -1985,14 +2309,26 @@ function mapMember(member) {
               <span class="title-icon amber"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>症状记录</h2>
             </div>
-            <span class="tag">点一条可编辑</span>
+            <span class="tag">可编辑</span>
           </header>
           <div class="card-body">
-            <p v-if="!todaySymptoms.length && !recentSymptoms.length" class="empty-note">还没有症状记录。点右下角「+」选「记症状」，大便、发烧都能记下时间。</p>
-            <template v-if="todaySymptoms.length">
+            <div v-if="symptomFilterOptions.length > 1" class="symptom-filter" aria-label="症状筛选">
+              <button
+                v-for="option in symptomFilterOptions"
+                :key="option"
+                class="symptom-filter-chip"
+                :class="{ active: symptomFilter === option }"
+                type="button"
+                @click="symptomFilter = option"
+              >
+                {{ option }}
+              </button>
+            </div>
+            <p v-if="!filteredTodaySymptoms.length && !filteredRecentSymptoms.length" class="empty-note">没有匹配的症状记录。</p>
+            <template v-if="filteredTodaySymptoms.length">
               <h3 class="symptom-subhead">今天</h3>
               <div class="symptom-list">
-                <button v-for="symptom in todaySymptoms" :key="symptom.id" class="symptom-row" type="button" @click="openManage('symptom', symptom)">
+                <button v-for="symptom in filteredTodaySymptoms" :key="symptom.id" class="symptom-row" type="button" @click="openManage('symptom', symptom)">
                   <strong class="time">{{ symptom.clock }}</strong>
                   <div>
                     <strong>{{ symptom.tag }}</strong>
@@ -2002,10 +2338,10 @@ function mapMember(member) {
                 </button>
               </div>
             </template>
-            <template v-if="recentSymptoms.length">
+            <template v-if="filteredRecentSymptoms.length">
               <h3 class="symptom-subhead">最近 7 天</h3>
               <div class="symptom-list">
-                <button v-for="symptom in recentSymptoms" :key="symptom.id" class="symptom-row past" type="button" @click="openManage('symptom', symptom)">
+                <button v-for="symptom in filteredRecentSymptoms" :key="symptom.id" class="symptom-row past" type="button" @click="openManage('symptom', symptom)">
                   <strong class="time">{{ symptom.timeLabel }}</strong>
                   <div>
                     <strong>{{ symptom.tag }}</strong>
@@ -2015,6 +2351,30 @@ function mapMember(member) {
                 </button>
               </div>
             </template>
+          </div>
+        </article>
+
+        <article class="card">
+          <header class="card-header">
+            <div class="card-title">
+              <span class="title-icon sage"><img :src="iconBody" alt="" aria-hidden="true" /></span>
+              <h2>评分记录</h2>
+            </div>
+            <span class="tag">最近 {{ scoreRecordRows.length }} 条</span>
+          </header>
+          <div class="card-body">
+            <p v-if="!scoreRecordRows.length" class="empty-note">还没有评分记录。</p>
+            <div v-else class="score-record-list">
+              <div v-for="row in scoreRecordRows" :key="row.id" class="score-record-row">
+                <time>{{ row.date }}<small>{{ row.time }}</small></time>
+                <div class="score-record-main">
+                  <span v-for="score in row.scores" :key="score.label" class="score-pill">
+                    {{ score.label }} <strong>{{ score.value }}</strong>
+                  </span>
+                  <p v-if="row.note">{{ row.note }}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </article>
 
@@ -2030,11 +2390,11 @@ function mapMember(member) {
               <img class="icon" :src="iconWarning" alt="" aria-hidden="true" />
               <h2>注意事项</h2>
             </div>
-            <span class="tag">生效中的会显示在“今天”</span>
+            <span class="tag">生效中置顶</span>
           </header>
           <div class="card-body">
-            <p class="section-hint">点一条可以编辑、归档或删除。生效中的会每天置顶在「今天」页。</p>
-            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。点右下角「+」选「记注意事项」，比如「化疗期间避免生食」。</p>
+            <p class="section-hint">点一条可编辑、归档或删除。</p>
+            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。</p>
             <div class="notice-list">
               <button v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
                 <span class="title-icon amber sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
@@ -2082,15 +2442,42 @@ function mapMember(member) {
         <div>
           <p class="eyebrow">{{ detailItem.type }} · {{ detailItem.dateLabel }}</p>
           <h2 id="detail-dialog-title">{{ detailItem.title }}</h2>
-          <dl class="detail-fields">
+          <dl v-if="!detailEditing" class="detail-fields">
             <div v-for="field in detailItem.fields" :key="field.label">
               <dt>{{ field.label }}</dt>
               <dd>{{ field.value }}</dd>
             </div>
           </dl>
+          <div v-else class="dialog-fields detail-edit-fields">
+            <label v-for="field in detailEditFields" :key="field.name" class="dialog-field" :class="{ checkbox: field.type === 'checkbox' }">
+              <span>{{ field.label }}</span>
+              <textarea
+                v-if="field.type === 'textarea'"
+                v-model="detailEditValues[field.name]"
+                :placeholder="field.placeholder || ''"
+                :rows="field.rows || 2"
+              ></textarea>
+              <input
+                v-else-if="field.type === 'checkbox'"
+                v-model="detailEditValues[field.name]"
+                type="checkbox"
+              />
+              <input
+                v-else
+                v-model="detailEditValues[field.name]"
+                :placeholder="field.placeholder || ''"
+                :type="field.type || 'text'"
+              />
+            </label>
+          </div>
         </div>
-        <div class="confirm-actions">
-          <button class="small-btn sage" type="button" @click="closeDetail">知道了</button>
+        <div v-if="!detailEditing" class="confirm-actions">
+          <button class="small-btn" type="button" @click="closeDetail">知道了</button>
+          <button v-if="detailEditable" class="small-btn sage" type="button" @click="beginDetailEdit">{{ detailItem.kind === 'event' ? '修改日程' : '修改' }}</button>
+        </div>
+        <div v-else class="confirm-actions">
+          <button class="small-btn" type="button" @click="cancelDetailEdit">取消</button>
+          <button class="small-btn sage" type="button" :disabled="loading" @click="saveDetailEdit">保存</button>
         </div>
       </section>
     </div>
@@ -2298,7 +2685,7 @@ function mapMember(member) {
         <div>
           <p class="eyebrow">默认最小可见</p>
           <h2 id="members-title">成员与权限</h2>
-          <p>点一下就能生成邀请链接，发到微信给家人朋友，对方打开登录后自动加入。</p>
+          <p>生成邀请链接，对方打开登录后自动加入。</p>
           <button class="invite-cta" type="button" :disabled="loading" @click="inviteMember">
             <img :src="iconChat" alt="" aria-hidden="true" />
             <span>生成邀请链接并复制</span>
@@ -2316,7 +2703,7 @@ function mapMember(member) {
             <button class="small-btn danger" type="button" @click="leaveSpace">退出空间</button>
             <button class="small-btn danger" type="button" @click="deleteAccount">删除账号</button>
           </div>
-          <p class="privacy-footnote">这里会记录昵称、成员关系、日程、身体记录、问题清单、动态和资料文本，用于就诊整理和家庭协作。敏感资料默认仅患者和管理员可见，成员退出后不再能访问空间数据。</p>
+          <p class="privacy-footnote">成员退出后不再能访问空间数据。敏感资料默认仅患者和管理员可见。</p>
         </div>
         <div class="confirm-actions">
           <button class="small-btn sage" type="button" @click="membersOpen = false">关闭</button>
@@ -2340,7 +2727,7 @@ function mapMember(member) {
                 v-model="dialog.values[field.name]"
                 :readonly="field.readonly"
                 :placeholder="field.placeholder || ''"
-                rows="4"
+                :rows="field.rows || 4"
               ></textarea>
               <input
                 v-else-if="field.type === 'checkbox'"

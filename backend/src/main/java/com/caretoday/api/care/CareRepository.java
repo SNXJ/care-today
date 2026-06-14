@@ -420,7 +420,8 @@ public class CareRepository {
             temperature = COALESCE(?, temperature),
             weight = COALESCE(?, weight),
             note = COALESCE(?, note),
-            record_date = COALESCE(?, record_date)
+            record_date = COALESCE(?, record_date),
+            measured_at = COALESCE(?, measured_at)
         WHERE id = ? AND space_id = ? AND deleted_at IS NULL
         """,
         request.painScore(),
@@ -432,6 +433,7 @@ public class CareRepository {
         request.weight(),
         request.note(),
         request.recordDate(),
+        request.measuredAt() == null ? null : Timestamp.from(request.measuredAt()),
         id(recordId),
         id(spaceId));
     return updated == 0 ? Optional.empty() : findBodyRecord(recordId);
