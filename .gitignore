@@ -6,3 +6,6 @@ target/
 deploy/certs/
 backups/
 .claude/
+
+# Vite config temp artifacts
+vite.config.js.timestamp-*.mjs

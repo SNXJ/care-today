@@ -62,7 +62,8 @@ public final class CareRequests {
       @DecimalMin("34.0") @DecimalMax("42.0") Double temperature,
       @DecimalMin("20.0") @DecimalMax("300.0") Double weight,
       String note,
-      LocalDate recordDate) {}
+      LocalDate recordDate,
+      Instant measuredAt) {}
 
   public record CreateSymptomEventRequest(
       @NotBlank String tag,
