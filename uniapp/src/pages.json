@@ -1,0 +1,30 @@
+{
+  "pages": [
+    { "path": "pages/index/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/timeline/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/moments/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/body/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/notices/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/compose/index", "style": { "navigationBarTitleText": "记下一件事" } },
+    { "path": "pages/profile/index", "style": { "navigationBarTitleText": "我的陪伴空间" } }
+  ],
+  "tabBar": {
+    "color": "#81766c",
+    "selectedColor": "#b85f55",
+    "backgroundColor": "#fffdf9",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "今天" },
+      { "pagePath": "pages/timeline/index", "text": "时间线" },
+      { "pagePath": "pages/moments/index", "text": "分享" },
+      { "pagePath": "pages/body/index", "text": "身体" },
+      { "pagePath": "pages/notices/index", "text": "注意" }
+    ]
+  },
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "陪你一起过今天",
+    "navigationBarBackgroundColor": "#fdf8f2",
+    "backgroundColor": "#fdf8f2"
+  }
+}

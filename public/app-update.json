@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "versionName": "1.0.0",
+  "versionCode": 100,
+  "title": "已经是最新版本",
+  "notes": "陪你一起过今天 UniApp 第一版。",
+  "force": false,
+  "packageType": "apk",
+  "downloadUrl": ""
+}

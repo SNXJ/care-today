@@ -1,0 +1,40 @@
+$paper: #fdf8f2;
+$panel: #fffdf9;
+$ink: #312b27;
+$muted: #766b62;
+$line: #eadbca;
+$rose: #b85f55;
+$rose-soft: #fde8e1;
+$sage: #71836a;
+
+page { min-height: 100%; background: $paper; color: $ink; font-family: "PingFang SC", "Noto Sans CJK SC", sans-serif; }
+view, text, button, input, textarea { box-sizing: border-box; }
+button::after { border: 0; }
+.page { min-height: 100vh; padding: calc(var(--status-bar-height) + 26rpx) 28rpx 160rpx; }
+.hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; padding: 20rpx 4rpx 30rpx; }
+.eyebrow { color: $rose; font-size: 24rpx; font-weight: 700; letter-spacing: 2rpx; }
+.title { display: block; margin-top: 8rpx; font-family: "Songti SC", serif; font-size: 48rpx; font-weight: 700; line-height: 1.15; }
+.subtitle { display: block; margin-top: 12rpx; color: $muted; font-size: 26rpx; line-height: 1.7; }
+.avatar { width: 76rpx; height: 76rpx; border: 1px solid $line; border-radius: 24rpx; background: $panel; color: $rose; font-size: 30rpx; font-weight: 700; }
+.card { margin-bottom: 24rpx; padding: 28rpx; border: 1px solid $line; border-radius: 24rpx; background: $panel; box-shadow: 0 12rpx 34rpx rgba(82,63,47,.06); }
+.card-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; font-size: 32rpx; font-weight: 700; }
+.tag { padding: 7rpx 14rpx; border-radius: 999rpx; background: $rose-soft; color: $rose; font-size: 22rpx; }
+.row { display: flex; gap: 18rpx; align-items: flex-start; padding: 20rpx 0; border-top: 1px solid #f0e5d8; }
+.row:first-child { border-top: 0; }
+.dot { flex: 0 0 auto; width: 18rpx; height: 18rpx; margin-top: 10rpx; border-radius: 50%; background: $rose; box-shadow: 0 0 0 8rpx $rose-soft; }
+.row-main { flex: 1; min-width: 0; }
+.row-title { display: block; font-size: 29rpx; font-weight: 700; line-height: 1.45; }
+.row-meta { display: block; margin-top: 8rpx; color: $muted; font-size: 24rpx; line-height: 1.55; }
+.empty { padding: 44rpx 12rpx; color: $muted; font-size: 26rpx; line-height: 1.7; text-align: center; }
+.primary { min-height: 88rpx; border-radius: 20rpx; background: $rose; color: #fff; font-size: 28rpx; font-weight: 700; line-height: 88rpx; }
+.secondary { min-height: 76rpx; border: 1px solid $line; border-radius: 18rpx; background: #fffaf5; color: $ink; font-size: 26rpx; line-height: 76rpx; }
+.fab { position: fixed; right: 32rpx; bottom: calc(130rpx + env(safe-area-inset-bottom)); z-index: 20; width: 100rpx; height: 100rpx; border-radius: 34rpx; background: $rose; color: #fff; font-size: 54rpx; line-height: 96rpx; box-shadow: 0 18rpx 38rpx rgba(184,95,85,.32); }
+.field { margin-bottom: 24rpx; }
+.label { display: block; margin-bottom: 10rpx; color: $muted; font-size: 24rpx; font-weight: 700; }
+.input, .textarea, .picker { width: 100%; min-height: 84rpx; padding: 20rpx 22rpx; border: 1px solid $line; border-radius: 18rpx; background: #fff; font-size: 28rpx; }
+.textarea { min-height: 180rpx; line-height: 1.6; }
+.form-actions { display: grid; gap: 16rpx; margin-top: 30rpx; }
+.boundary { color: $muted; font-size: 23rpx; line-height: 1.8; }
+.metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18rpx; }
+.metric { padding: 24rpx; border: 1px solid $line; border-radius: 20rpx; background: #fff; }
+.metric-value { display: block; margin-top: 10rpx; color: $rose; font-family: "Songti SC", serif; font-size: 44rpx; font-weight: 700; }

@@ -1,0 +1,33 @@
+{
+  "name": "care-today-uniapp",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:h5": "uni",
+    "dev:mp-weixin": "uni -p mp-weixin",
+    "build:h5": "uni build",
+    "build:mp-weixin": "uni build -p mp-weixin",
+    "build:app": "uni build -p app-plus",
+    "type-check": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-alpha-1000920260615733",
+    "@dcloudio/uni-app-plus": "3.0.0-alpha-1000920260615733",
+    "@dcloudio/uni-components": "3.0.0-alpha-1000920260615733",
+    "@dcloudio/uni-h5": "3.0.0-alpha-1000920260615733",
+    "@dcloudio/uni-mp-weixin": "3.0.0-alpha-1000920260615733",
+    "vue": "3.5.35",
+    "vue-i18n": "9.14.5"
+  },
+  "devDependencies": {
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/uni-cli-shared": "3.0.0-alpha-1000920260615733",
+    "@dcloudio/vite-plugin-uni": "3.0.0-alpha-1000920260615733",
+    "@vue/tsconfig": "0.8.1",
+    "sass": "1.93.2",
+    "sass-embedded": "1.93.2",
+    "typescript": "5.9.3",
+    "vite": "7.3.3",
+    "vue-tsc": "3.1.5"
+  }
+}
