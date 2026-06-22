@@ -175,10 +175,28 @@ function upload() {
   xhr.send(form);
 }
 
+function showPicked(f) {
+  $('filename').textContent = f
+    ? `${f.name}（${(f.size / 1048576).toFixed(1)} MB）`
+    : '点此选择 APK 文件';
+}
+
 $('loginBtn').addEventListener('click', login);
 $('logoutBtn').addEventListener('click', logout);
 $('uploadBtn').addEventListener('click', upload);
 $('password').addEventListener('keydown', (e) => { if (e.key === 'Enter') login(); });
+$('file').addEventListener('change', function () { showPicked(this.files[0]); });
+
+// 拖拽支持（桌面浏览器）
+const zone = $('filezone');
+['dragover', 'dragenter'].forEach((ev) =>
+  zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.add('drag'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  zone.addEventListener(ev, (e) => { e.preventDefault(); zone.classList.remove('drag'); }));
+zone.addEventListener('drop', (e) => {
+  const f = e.dataTransfer.files[0];
+  if (f) { $('file').files = e.dataTransfer.files; showPicked(f); }
+});
 
 if (token) {
   showLoggedIn(true);

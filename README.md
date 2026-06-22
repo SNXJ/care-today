@@ -1,6 +1,6 @@
 # CareToday
 
-CareToday（陪你一起过今天）是一个面向患者、家人和朋友的陪伴支持 Web 工具。它不提供医疗诊断、治疗建议或用药判断，而是帮助一个家庭把复诊安排、身体记录、问医生清单、帮忙任务和陪伴留言整理在同一个空间里。
+CareToday（陪你一起过今天）是一个面向患者、家人和朋友的陪伴支持应用，覆盖 **Web、Android / iOS（Flutter）、微信小程序** 三端，配套 Spring Boot 后端、应用内自动更新与扫码下载页。它不提供医疗诊断、治疗建议或用药判断，而是帮助一个家庭把复诊安排、身体记录、问医生清单、帮忙任务和陪伴留言整理在同一个空间里。
 
 项目地址：[SNXJ/care-today](https://github.com/SNXJ/care-today.git)
 
@@ -15,15 +15,34 @@ CareToday 希望把这些事变得更清楚一点：
 - 复诊前可以更快整理问题、症状和资料。
 - 页面始终保持医疗边界，不替代医生意见。
 
-## 页面截图
+## 下载与安装
 
-桌面端：
+- 扫码 / 打开下载页：**https://your-domain.example/download/**
+- Android：在下载页点「下载 APK」直接安装；装好后 App 会**自动检查更新**（在「我的 → 检查更新」也可手动检查），有新版会弹窗下载并拉起安装。
+- iPhone / iPad：暂未上架，敬请期待。
+- 发版管理页（管理员）：**https://your-domain.example/manage/**，登录后上传新 APK、管理版本号。
 
-![CareToday Web 原型桌面端预览](design-preview/preview.png)
+## 界面预览
 
-移动端：
+应用主界面 · 今天页（日程、下次复诊倒计时、身体记录、问医生、注意事项）：
 
-![CareToday Web 原型移动端预览](design-preview/preview-mobile.png)
+| 桌面 | 移动 |
+| --- | --- |
+| ![应用主界面桌面](design-preview/preview.png) | ![应用主界面移动](design-preview/preview-mobile.png) |
+
+App 下载页（线上实拍，扫码即可安装）：
+
+| 桌面 | 手机 |
+| --- | --- |
+| ![下载页桌面](docs/screenshots/download-desktop.png) | ![下载页手机](docs/screenshots/download-mobile.png) |
+
+登录与发版管理页（线上实拍）：
+
+| Web 登录 | 发版管理 |
+| --- | --- |
+| ![Web 登录](docs/screenshots/web-login-desktop.png) | ![发版管理页](docs/screenshots/manage-login.png) |
+
+> Flutter App 真机各页面（时间线连接线、身体趋势图、发布器弹层等）截图可放入 `docs/screenshots/` 后在此处补充。
 
 ## 当前状态
 
@@ -34,12 +53,15 @@ CareToday 希望把这些事变得更清楚一点：
 - `uniapp/`：微信小程序客户端
 - `backend/`：Spring Boot 3 Java 后端
 - `backend/src/main/resources/db/migration/V1__init.sql`：Flyway 数据库迁移
+- `backend/src/main/java/com/caretoday/api/release/`：App 版本检查与发布接口
 - `deploy/docker-compose.yml`：MySQL、后端、Nginx 部署骨架
+- `deploy/apk-admin/`：APK 上传管理页（`/manage/`）
+- `deploy/download/`：扫码下载页（`/download/`）
+- `deploy/UPDATE_DEPLOY.md`：应用内更新系统部署说明
 - `design-preview/index.html`：设计风格标准页面
-- `design-preview/preview.png`：Web 原型桌面端截图
-- `design-preview/preview-mobile.png`：Web 原型移动端截图
+- `docs/screenshots/`：线上实拍截图（下载页、Web 应用、管理页）
 
-后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化、编辑/删除、成员退出/移除、账号删除和审计日志写入。前端已接入基础 API：登录/注册、创建空间、加载空间数据，以及添加、编辑、删除日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。
+后端已实现注册/登录、JWT 鉴权、空间成员权限校验、核心业务接口持久化、编辑/删除、成员退出/移除、账号删除、审计日志写入，以及 **App 版本管理与发布接口**。前端已接入基础 API：登录/注册、创建空间、加载空间数据，以及添加、编辑、删除日程、身体记录、问医生问题、帮忙任务、留言、资料和成员邀请。Flutter Android 端已实现**应用内自动更新**（下载 + 安装）并已配置**正式签名打包**；线上已发布 v1.0.0，可在下载页扫码安装。
 
 ## 设计风格标准
 
@@ -184,6 +206,18 @@ npm run build:mp-weixin
 
 详细配置见 `flutter_app/README.md` 和 `uniapp/README.md`。微信小程序正式发布需要小程序 AppID 和服务器域名白名单；Flutter 正式发布需要 Android/Apple 签名材料。
 
+## 应用内更新与发布
+
+Android 端内置自动更新；APK 托管、版本管理、上传与扫码下载都在自己的服务器上完成，部署细节见 `deploy/UPDATE_DEPLOY.md`。
+
+- 版本检查（公开）：`GET /api/app/version`，返回最新版本与 APK 地址；无版本时 204。
+- 发布管理（管理员，白名单账号）：`GET/POST/DELETE /api/app/versions`，APK 与 `releases.json` 存于服务器卷，Nginx 静态分发到 `/apk/`。
+- 上传管理页：`/manage/`（`deploy/apk-admin/`，复用账号登录 + 管理员白名单 `ADMIN_ACCOUNTS`）。
+- 扫码下载页：`/download/`（`deploy/download/`，含二维码，自动展示最新版本）。
+- 客户端行为：Android 弹窗 → 带进度下载 → 拉起系统安装器（需 `REQUEST_INSTALL_PACKAGES`）；iOS/其他跳转下载页；支持「强制更新」。
+
+发新版流程：递增 `flutter_app/pubspec.yaml` 的 `version: x.y.z+N` → `flutter build apk --release --split-per-abi`（正式签名见 `flutter_app/android/key.properties`，密钥务必离线备份）→ 在 `/manage/` 上传 `app-arm64-v8a-release.apk`，`versionCode` 填 `N`。已安装用户下次检查即可收到。
+
 ## 数据从哪里添加
 
 当前数据有两个入口：
@@ -229,9 +263,13 @@ care-today/
   specs/                    跨端需求与验收标准
   IMPLEMENTATION_PLAN.md    实施进度与门禁状态
   deploy/                   Docker Compose、Nginx、备份脚本
+  deploy/apk-admin/         APK 上传管理页（/manage/）
+  deploy/download/          扫码下载页（/download/）
+  deploy/UPDATE_DEPLOY.md   应用内更新系统部署说明
   患者陪伴需求文档.md        产品需求文档
   README.md                 项目说明
   docs/design-style-guide.md 设计风格规范文档
+  docs/screenshots/         线上实拍截图
   design-preview/index.html 设计风格标准页面
   design-preview/preview.png Web 原型桌面端截图
   design-preview/preview-mobile.png Web 原型移动端截图

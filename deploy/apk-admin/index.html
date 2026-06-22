@@ -54,6 +54,18 @@
     .who { float: right; font-size: 13px; color: var(--muted); }
     .progress { height: 6px; background: var(--line); border-radius: 6px; overflow: hidden; margin-top: 10px; }
     .progress > span { display: block; height: 100%; width: 0; background: var(--sage); transition: width .2s; }
+    .filezone {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      padding: 22px 14px; border: 2px dashed var(--line); border-radius: 14px;
+      background: #fff; cursor: pointer; text-align: center; margin-top: 4px;
+      transition: border-color .15s, background .15s;
+    }
+    .filezone:hover, .filezone.drag { border-color: var(--rose); background: #fff7ee; }
+    .filezone strong { color: var(--rose); font-size: 15px; }
+    .filezone small { color: var(--muted); font-size: 12px; }
+    #file { display: block; width: 100%; margin-top: 8px; font-size: 12px; color: var(--muted); }
+    .browserhint { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 8px 0 0; }
+    .browserhint b { color: var(--rose); }
   </style>
 </head>
 <body>
@@ -90,7 +102,12 @@
         <label for="forceUpdate" style="margin:0;color:var(--ink)">强制更新（不更新无法继续使用）</label>
       </div>
       <label>APK 文件</label>
-      <input type="file" id="file" accept=".apk" />
+      <label class="filezone" id="filezone" for="file">
+        <strong id="filename">点此选择 APK 文件</strong>
+        <small>或把 .apk 拖到这里</small>
+      </label>
+      <input type="file" id="file" accept=".apk,application/vnd.android.package-archive" />
+      <p class="browserhint">建议用电脑的 Chrome / Edge / Safari 上传。<b>微信内置浏览器无法选择文件</b>，请点右上角「···」→「在浏览器打开」。</p>
       <div class="progress hidden" id="prog"><span></span></div>
       <button id="uploadBtn">上传发布</button>
       <button class="ghost" id="logoutBtn">退出登录</button>
