@@ -2,6 +2,7 @@ package com.caretoday.api.auth;
 
 import com.caretoday.api.auth.AuthRequests.LoginRequest;
 import com.caretoday.api.auth.AuthRequests.RegisterRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,5 +26,11 @@ public class AuthController {
   @PostMapping("/login")
   public Object login(@Valid @RequestBody LoginRequest request) {
     return authService.login(request);
+  }
+
+  @PostMapping("/refresh")
+  public Object refresh(HttpServletRequest request) {
+    CurrentUser currentUser = (CurrentUser) request.getAttribute(AuthInterceptor.CURRENT_USER_ATTRIBUTE);
+    return authService.refresh(currentUser.id());
   }
 }

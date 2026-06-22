@@ -87,9 +87,14 @@ public class CareService {
     return invite;
   }
 
-  public SpaceInvite getInvite(UUID token) {
-    return careRepository.findInvite(token)
+  public Map<String, Object> getInvite(UUID token) {
+    SpaceInvite invite = careRepository.findInvite(token)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "邀请链接无效或已过期"));
+    return Map.of(
+        "token", invite.token(),
+        "nickname", invite.nickname(),
+        "role", invite.role(),
+        "expiresAt", invite.expiresAt());
   }
 
   public SpaceMember acceptInvite(UUID currentUserId, UUID token, AcceptInviteRequest request) {
@@ -274,17 +279,15 @@ public class CareService {
   }
 
   public SupportMessage createMessage(UUID currentUserId, UUID spaceId, CreateMessageRequest request) {
+    // 陪伴协作：所有活跃成员都可以在「分享」里发动态（编辑/删除仍限管理员）。
     ensureActiveMember(spaceId, currentUserId);
-    if (!careRepository.isAdmin(spaceId, currentUserId)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者本人可以发布动态");
-    }
     SupportMessage message = careRepository.createMessage(spaceId, currentUserId, request.text());
     careRepository.audit(spaceId, currentUserId, "message.create", "message", message.id());
     return message;
   }
 
   public SupportMessage updateMessage(UUID currentUserId, UUID spaceId, UUID messageId, UpdateMessageRequest request) {
-    ensureActiveMember(spaceId, currentUserId);
+    ensureAdmin(spaceId, currentUserId);
     SupportMessage message = careRepository.updateMessage(spaceId, messageId, request)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found"));
     careRepository.audit(spaceId, currentUserId, "message.update", "message", message.id());
@@ -292,7 +295,7 @@ public class CareService {
   }
 
   public void deleteMessage(UUID currentUserId, UUID spaceId, UUID messageId) {
-    ensureActiveMember(spaceId, currentUserId);
+    ensureAdmin(spaceId, currentUserId);
     if (!careRepository.deleteMessage(spaceId, messageId)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Message not found");
     }
@@ -301,11 +304,14 @@ public class CareService {
 
   public List<CareNote> listNotes(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
-    return careRepository.listNotes(spaceId);
+    return careRepository.listNotes(spaceId, careRepository.isAdmin(spaceId, currentUserId));
   }
 
   public CareNote createNote(UUID currentUserId, UUID spaceId, CreateNoteRequest request) {
     ensureActiveMember(spaceId, currentUserId);
+    if (request.visibility() == CareModels.NoteVisibility.PATIENT_ADMIN && !careRepository.isAdmin(spaceId, currentUserId)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者/管理员可以保存私密资料");
+    }
     CareNote note = careRepository.createNote(spaceId, currentUserId, request);
     careRepository.audit(spaceId, currentUserId, "note.create", "note", note.id());
     return note;
@@ -313,6 +319,7 @@ public class CareService {
 
   public CareNote updateNote(UUID currentUserId, UUID spaceId, UUID noteId, UpdateNoteRequest request) {
     ensureActiveMember(spaceId, currentUserId);
+    ensureNoteWritable(spaceId, currentUserId, noteId, request.visibility());
     CareNote note = careRepository.updateNote(spaceId, noteId, request)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Note not found"));
     careRepository.audit(spaceId, currentUserId, "note.update", "note", note.id());
@@ -321,6 +328,7 @@ public class CareService {
 
   public void deleteNote(UUID currentUserId, UUID spaceId, UUID noteId) {
     ensureActiveMember(spaceId, currentUserId);
+    ensureNoteWritable(spaceId, currentUserId, noteId, null);
     if (!careRepository.deleteNote(spaceId, noteId)) {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Note not found");
     }
@@ -394,7 +402,17 @@ public class CareService {
   private void ensureAdmin(UUID spaceId, UUID currentUserId) {
     ensureActiveMember(spaceId, currentUserId);
     if (!careRepository.isAdmin(spaceId, currentUserId)) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者/管理员可以邀请成员");
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者/管理员可以操作");
+    }
+  }
+
+  private void ensureNoteWritable(UUID spaceId, UUID currentUserId, UUID noteId, CareModels.NoteVisibility nextVisibility) {
+    CareNote note = careRepository.findNote(noteId)
+        .filter(candidate -> candidate.spaceId().equals(spaceId))
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Note not found"));
+    boolean admin = careRepository.isAdmin(spaceId, currentUserId);
+    if (!admin && (note.visibility() == CareModels.NoteVisibility.PATIENT_ADMIN || nextVisibility == CareModels.NoteVisibility.PATIENT_ADMIN)) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, "只有患者/管理员可以操作私密资料");
     }
   }
 }

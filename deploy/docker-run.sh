@@ -9,9 +9,10 @@ NGINX_CONTAINER="${NGINX_CONTAINER:-care-today-nginx}"
 MYSQL_VOLUME="${MYSQL_VOLUME:-care_today_mysql}"
 MYSQL_DATABASE="${MYSQL_DATABASE:-care_today}"
 MYSQL_USER="${MYSQL_USER:-care_today}"
-MYSQL_PASSWORD="${MYSQL_PASSWORD:-care_today_password}"
-MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:-care_today_root_password}"
-JWT_SECRET="${JWT_SECRET:-replace-with-a-long-random-secret}"
+MYSQL_PASSWORD="${MYSQL_PASSWORD:?Set MYSQL_PASSWORD before running this script}"
+MYSQL_ROOT_PASSWORD="${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD before running this script}"
+JWT_SECRET="${JWT_SECRET:?Set JWT_SECRET before running this script}"
+CORS_ALLOWED_ORIGINS="${CORS_ALLOWED_ORIGINS:-https://your-domain.example,http://localhost:5173,http://localhost:8080,https://localhost:8443}"
 CERT_DIR="$ROOT_DIR/deploy/certs"
 
 cd "$ROOT_DIR"
@@ -67,6 +68,7 @@ docker run -d \
   -e DATABASE_PASSWORD="$MYSQL_PASSWORD" \
   -e FLYWAY_ENABLED=true \
   -e JWT_SECRET="$JWT_SECRET" \
+  -e CORS_ALLOWED_ORIGINS="$CORS_ALLOWED_ORIGINS" \
   eclipse-temurin:17-jre \
   java -jar /app/app.jar >/dev/null
 

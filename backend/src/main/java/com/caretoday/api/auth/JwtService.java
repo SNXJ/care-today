@@ -16,8 +16,10 @@ public class JwtService {
   private final SecretKey key;
 
   public JwtService(@Value("${care-today.jwt-secret}") String secret) {
-    String normalized = secret.length() < 32 ? secret.repeat((32 / Math.max(secret.length(), 1)) + 1) : secret;
-    this.key = Keys.hmacShaKeyFor(normalized.substring(0, Math.max(32, normalized.length())).getBytes(StandardCharsets.UTF_8));
+    if (secret == null || secret.isBlank() || secret.length() < 32 || isKnownDefault(secret)) {
+      throw new IllegalStateException("JWT_SECRET must be a non-default value with at least 32 characters");
+    }
+    this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
   }
 
   public String createToken(AuthRepository.UserRecord user) {
@@ -34,5 +36,10 @@ public class JwtService {
   public CurrentUser parseToken(String token) {
     Claims claims = Jwts.parser().verifyWith(key).build().parseSignedClaims(token).getPayload();
     return new CurrentUser(UUID.fromString(claims.getSubject()), String.valueOf(claims.get("nickname")));
+  }
+
+  private boolean isKnownDefault(String secret) {
+    return "change-this-development-secret-to-a-long-random-value".equals(secret)
+        || "replace-with-a-long-random-secret".equals(secret);
   }
 }

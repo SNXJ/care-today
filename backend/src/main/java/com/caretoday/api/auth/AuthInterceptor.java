@@ -28,7 +28,12 @@ public class AuthInterceptor implements HandlerInterceptor {
     if (authorization == null || !authorization.startsWith("Bearer ")) {
       throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "missing bearer token");
     }
-    CurrentUser tokenUser = jwtService.parseToken(authorization.substring("Bearer ".length()));
+    CurrentUser tokenUser;
+    try {
+      tokenUser = jwtService.parseToken(authorization.substring("Bearer ".length()));
+    } catch (RuntimeException ex) {
+      throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid bearer token");
+    }
     authRepository.findById(tokenUser.id())
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "account is not active"));
     RequestAuditContext.set(clientIp(request), request.getHeader("User-Agent"));

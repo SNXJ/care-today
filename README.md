@@ -27,10 +27,11 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 当前状态
 
-当前仓库已包含 Vue 3 + Vite Web、UniApp 跨端客户端、Spring Boot 后端 API、MySQL schema 和独立的 CareToday 设计风格标准预览：
+当前仓库已包含 Vue 3 + Vite Web、Flutter iOS/Android 客户端、UniApp 微信小程序、Spring Boot 后端 API、MySQL schema 和设计风格标准预览：
 
 - `index.html`：Vue 应用入口
-- `uniapp/`：可构建 H5、微信小程序和 App 资源的跨端客户端
+- `flutter_app/`：iOS 和 Android 原生客户端
+- `uniapp/`：微信小程序客户端
 - `backend/`：Spring Boot 3 Java 后端
 - `backend/src/main/resources/db/migration/V1__init.sql`：Flyway 数据库迁移
 - `deploy/docker-compose.yml`：MySQL、后端、Nginx 部署骨架
@@ -86,10 +87,10 @@ CareToday 希望把这些事变得更清楚一点：
 - Auth: JWT + BCrypt
 - Deploy: Nginx + HTTPS + Docker Compose
 
-跨端客户端当前已实现：
+移动客户端当前已实现：
 
-- UniApp H5 / 微信小程序 / App 资源构建
-- 小程序平台更新检查与 App 远程版本清单
+- Flutter iOS / Android 工程、原生安全 Token 存储和核心业务页面
+- UniApp 微信小程序构建与平台更新检查
 
 后续可考虑：
 
@@ -159,18 +160,29 @@ https://localhost:8443
 
 `deploy/docker-run.sh` 会为本地验证生成自签名证书到 `deploy/certs/`。浏览器首次访问 HTTPS 可能需要手动信任本地证书；正式生产环境应替换为有效域名证书。
 
-## UniApp 跨端客户端
+## 移动端客户端
+
+Flutter iOS / Android：
+
+```bash
+cd flutter_app
+flutter pub get
+flutter analyze
+flutter test
+flutter build apk --debug
+flutter build ios --debug --no-codesign
+```
+
+UniApp 微信小程序：
 
 ```bash
 cd uniapp
 npm install
 npm run type-check
-npm run build:h5
 npm run build:mp-weixin
-npm run build:app
 ```
 
-详细配置、打包与更新流程见 `uniapp/README.md`。微信小程序正式发布需要小程序 AppID 和服务器域名白名单；App 正式安装包需要 DCloud AppID、包名和签名证书。
+详细配置见 `flutter_app/README.md` 和 `uniapp/README.md`。微信小程序正式发布需要小程序 AppID 和服务器域名白名单；Flutter 正式发布需要 Android/Apple 签名材料。
 
 ## 数据从哪里添加
 
@@ -212,7 +224,8 @@ CareToday 仅用于生活陪伴、就诊整理和家庭协作。
 care-today/
   index.html                Vue 应用入口
   backend/                  Spring Boot 3 后端 API
-  uniapp/                   UniApp H5、微信小程序、App 客户端
+  flutter_app/              Flutter iOS、Android 客户端
+  uniapp/                   UniApp 微信小程序客户端
   specs/                    跨端需求与验收标准
   IMPLEMENTATION_PLAN.md    实施进度与门禁状态
   deploy/                   Docker Compose、Nginx、备份脚本

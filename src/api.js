@@ -1,7 +1,34 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
+const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
-export function createApi(getToken) {
-  async function request(path, options = {}) {
+export function createApi(getToken, handlers = {}) {
+  let refreshPromise = null;
+
+  async function refreshTokenIfNeeded(path) {
+    if (path.startsWith('/auth/') || !getToken()) {
+      return;
+    }
+    const lastRefreshAt = Number(localStorage.getItem('care-today-token-refreshed-at') || 0);
+    if (Date.now() - lastRefreshAt < TOKEN_REFRESH_INTERVAL_MS) {
+      return;
+    }
+    if (!refreshPromise) {
+      refreshPromise = request('/auth/refresh', { method: 'POST' }, { skipRefresh: true })
+        .then((result) => {
+          handlers.onTokenRefresh?.(result);
+          localStorage.setItem('care-today-token-refreshed-at', String(Date.now()));
+        })
+        .finally(() => {
+          refreshPromise = null;
+        });
+    }
+    await refreshPromise;
+  }
+
+  async function request(path, options = {}, meta = {}) {
+    if (!meta.skipRefresh) {
+      await refreshTokenIfNeeded(path);
+    }
     const headers = {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
@@ -17,6 +44,10 @@ export function createApi(getToken) {
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
+      if (response.status === 401 && path !== '/auth/login' && path !== '/auth/register') {
+        handlers.onAuthExpired?.();
+        throw new Error('登录已过期，请重新登录');
+      }
       if (path === '/auth/register' && response.status === 409) {
         throw new Error(error.reason || '账号已存在，请直接登录');
       }
@@ -31,6 +62,7 @@ export function createApi(getToken) {
   return {
     register: (body) => request('/auth/register', { method: 'POST', body }),
     login: (body) => request('/auth/login', { method: 'POST', body }),
+    refresh: () => request('/auth/refresh', { method: 'POST' }, { skipRefresh: true }),
     listSpaces: () => request('/spaces'),
     createSpace: (body) => request('/spaces', { method: 'POST', body }),
     getSpace: (spaceId) => request(`/spaces/${spaceId}`),

@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { onLaunch } from '@dcloudio/uni-app';
-import { checkForUpdates } from './utils/update';
+import { checkMiniProgramUpdate } from './utils/update';
 
-onLaunch(() => checkForUpdates());
+onLaunch(() => checkMiniProgramUpdate());
 </script>
 
 <style lang="scss">

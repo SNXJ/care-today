@@ -47,6 +47,7 @@ const currentUser = ref(JSON.parse(localStorage.getItem('care-today-user') || 'n
 const activeSpaceId = ref(localStorage.getItem('care-today-space-id') || '');
 const authMode = ref('login');
 const authForm = ref({
+  account: '',
   email: '',
   phone: '',
   nickname: '',
@@ -80,7 +81,10 @@ const detailEditing = ref(false);
 const detailEditValues = ref({});
 const invitePhone = ref('');
 const privacyAccepted = ref(false);
-const api = createApi(() => token.value);
+const api = createApi(() => token.value, {
+  onTokenRefresh: applyAuthSession,
+  onAuthExpired: () => logout({ silent: true }),
+});
 
 const spaces = ref([]);
 const activeSpace = ref(null);
@@ -780,8 +784,13 @@ async function withLoading(action) {
 
 async function submitAuth() {
   await withLoading(async () => {
-    const email = authForm.value.email.trim();
-    const phone = authForm.value.phone.trim();
+    const account = authForm.value.account.trim();
+    const email = authMode.value === 'login'
+      ? (account.includes('@') ? account : '')
+      : authForm.value.email.trim();
+    const phone = authMode.value === 'login'
+      ? (account.includes('@') ? '' : account)
+      : authForm.value.phone.trim();
     const payload = {
       email: email || undefined,
       phone: phone || undefined,
@@ -789,10 +798,7 @@ async function submitAuth() {
       ...(authMode.value === 'register' ? { nickname: authForm.value.nickname.trim() || defaultNickname(email, phone) } : {}),
     };
     const result = authMode.value === 'register' ? await api.register(payload) : await api.login(payload);
-    token.value = result.token;
-    currentUser.value = result.user;
-    localStorage.setItem('care-today-token', result.token);
-    localStorage.setItem('care-today-user', JSON.stringify(result.user));
+    applyAuthSession(result);
     spaceForm.value.patientNickname = result.user.nickname;
     showToast(authMode.value === 'register' ? '注册成功' : '登录成功');
     await loadSpaces();
@@ -805,6 +811,14 @@ function defaultNickname(email, phone) {
     return email.split('@')[0];
   }
   return phone || '新成员';
+}
+
+function applyAuthSession(result) {
+  token.value = result.token;
+  currentUser.value = result.user;
+  localStorage.setItem('care-today-token', result.token);
+  localStorage.setItem('care-today-user', JSON.stringify(result.user));
+  localStorage.setItem('care-today-token-refreshed-at', String(Date.now()));
 }
 
 async function confirmLogout() {
@@ -910,7 +924,7 @@ async function copyText(text) {
   return false;
 }
 
-function logout() {
+function logout(options = {}) {
   token.value = '';
   currentUser.value = null;
   activeSpaceId.value = '';
@@ -928,7 +942,10 @@ function logout() {
   localStorage.removeItem('care-today-user');
   localStorage.removeItem('care-today-space-id');
   localStorage.removeItem('care-today-role');
-  showToast('已退出登录');
+  localStorage.removeItem('care-today-token-refreshed-at');
+  if (!options.silent) {
+    showToast('已退出登录');
+  }
 }
 
 async function loadSpaces() {
@@ -1363,7 +1380,7 @@ async function toggleQuestionAsked(question) {
 }
 
 const composerActions = [
-  { id: 'message', label: '说说此刻', desc: '发布给家人看', icon: iconChat, patientOnly: true, bodyRelated: false },
+  { id: 'message', label: '说说此刻', desc: '发布给家人看', icon: iconChat, patientOnly: false, bodyRelated: false },
   { id: 'event', label: '加日程', desc: '复诊、检查、提醒', icon: iconCalendar, bodyRelated: false },
   { id: 'bodyRecord', label: '记身体状态', desc: '疼痛、睡眠等评分', icon: iconBody, bodyRelated: true },
   { id: 'temperature', label: '记体温', desc: '测量时间和数值', icon: iconBody, bodyRelated: true },
@@ -2000,8 +2017,11 @@ function mapMember(member) {
           </header>
           <div class="card-body">
             <div class="auth-grid">
-              <input v-model="authForm.email" type="email" placeholder="邮箱，例如 927990956@qq.com" />
-              <input v-model="authForm.phone" type="text" placeholder="手机号，可选" />
+              <input v-if="authMode === 'login'" v-model="authForm.account" type="text" inputmode="email" placeholder="手机号或邮箱" />
+              <template v-else>
+                <input v-model="authForm.email" type="email" placeholder="邮箱，例如 927990956@qq.com" />
+                <input v-model="authForm.phone" type="text" inputmode="tel" placeholder="手机号，可选" />
+              </template>
               <input v-if="authMode === 'register'" v-model="authForm.nickname" type="text" placeholder="昵称" />
               <input v-model="authForm.password" type="password" placeholder="密码" />
             </div>
@@ -2190,10 +2210,10 @@ function mapMember(member) {
               <img class="icon" :src="iconChat" alt="" aria-hidden="true" />
               <h2>分享</h2>
             </div>
-            <span class="tag">{{ isPatient ? '患者发布' : '仅患者可发布' }}</span>
+            <span class="tag">{{ isPatient ? '管理员可管理' : '成员都能发' }}</span>
           </header>
           <div class="card-body">
-            <p v-if="!messages.length" class="empty-note">{{ isPatient ? '还没有分享。点右下角「+」发布近况。' : 'TA 还没有发过分享。' }}</p>
+            <p v-if="!messages.length" class="empty-note">还没有分享。点右下角「+」发布近况。</p>
             <div v-else class="message-list moments-feed">
               <component :is="isPatient ? 'button' : 'div'" v-for="message in messages" :key="message.id" class="message" :class="{ tappable: isPatient }" type="button" @click="isPatient && openManage('message', message)">
                 <p>{{ message.text }}</p>

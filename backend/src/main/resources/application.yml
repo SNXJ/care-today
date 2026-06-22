@@ -11,6 +11,10 @@ spring:
   flyway:
     enabled: ${FLYWAY_ENABLED:false}
     locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: ${MAX_APK_SIZE:300MB}
+      max-request-size: ${MAX_APK_SIZE:300MB}
 
 management:
   endpoints:
@@ -20,4 +24,9 @@ management:
 
 care-today:
   jwt-secret: ${JWT_SECRET:change-this-development-secret-to-a-long-random-value}
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://your-domain.example,http://localhost:5173,http://localhost:8080,https://localhost:8443}
   medical-boundary: "CareToday only supports life companionship, appointment organization, and family collaboration. It does not provide diagnosis, treatment advice, or medication judgment."
+  # App 发布管理：白名单账号（邮箱/手机号，逗号分隔）可上传 APK；release-dir 存放 APK 与 releases.json
+  admin-accounts: ${ADMIN_ACCOUNTS:}
+  release-dir: ${APP_RELEASE_DIR:./data/releases}
+  apk-base-url: ${APK_BASE_URL:https://your-domain.example/apk}

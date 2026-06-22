@@ -5,7 +5,7 @@ BACKUP_DIR="${BACKUP_DIR:-./backups}"
 CONTAINER="${MYSQL_CONTAINER:-care-today-mysql}"
 DATABASE="${MYSQL_DATABASE:-care_today}"
 USER="${MYSQL_USER:-care_today}"
-PASSWORD="${MYSQL_PASSWORD:-care_today_password}"
+PASSWORD="${MYSQL_PASSWORD:?Set MYSQL_PASSWORD before running this script}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
 mkdir -p "$BACKUP_DIR"

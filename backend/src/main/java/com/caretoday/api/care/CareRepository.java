@@ -732,15 +732,22 @@ public class CareRepository {
   }
 
   public List<CareNote> listNotes(UUID spaceId) {
+    return listNotes(spaceId, true);
+  }
+
+  public List<CareNote> listNotes(UUID spaceId, boolean includePatientAdminOnly) {
     return jdbcTemplate.query(
         """
         SELECT id, space_id, title, type, content, visibility, created_at
         FROM notes
-        WHERE space_id = ? AND deleted_at IS NULL
+        WHERE space_id = ?
+          AND deleted_at IS NULL
+          AND (? OR visibility = 'members')
         ORDER BY created_at DESC
         """,
         (rs, rowNum) -> mapNote(rs),
-        id(spaceId));
+        id(spaceId),
+        includePatientAdminOnly);
   }
 
   public Optional<CareNote> findNote(UUID noteId) {
