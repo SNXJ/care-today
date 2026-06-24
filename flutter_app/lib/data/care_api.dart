@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../core/app_config.dart';
 
 class ApiException implements Exception {
   const ApiException(this.message, [this.statusCode]);
@@ -10,7 +11,7 @@ class ApiException implements Exception {
 }
 
 class CareApi {
-  CareApi({this.baseUrl = 'https://your-domain.example/api', http.Client? client})
+  CareApi({this.baseUrl = careApiBase, http.Client? client})
       : _client = client ?? http.Client();
   final String baseUrl;
   final http.Client _client;

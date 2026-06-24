@@ -2,6 +2,7 @@
 // ignore_for_file: use_build_context_synchronously
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../core/app_config.dart';
 import '../../core/format.dart';
 import '../../core/ui.dart';
 import '../session/session_controller.dart';
@@ -551,7 +552,7 @@ Future<void> inviteMember(BuildContext context, SessionController s) async {
         method: 'POST',
         body: {'nickname': '家人朋友', 'role': 'FRIEND'}));
     final url =
-        'https://your-domain.example/?invite=${invite['token'] ?? invite['id']}';
+        '$careOrigin/?invite=${invite['token'] ?? invite['id']}';
     await Clipboard.setData(ClipboardData(text: url));
     if (!context.mounted) return;
     await showForm(context,

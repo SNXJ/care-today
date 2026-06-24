@@ -11,7 +11,8 @@ const roleName: Record<string,string> = { PATIENT_ADMIN: '患者/管理员', FAM
 async function invite() {
   try {
     const result = await api.createInvite(session.data.space.id, { nickname: nickname.value.trim() || '家人朋友', role: 'FRIEND' });
-    const url = `https://your-domain.example/?invite=${result.token}`;
+    const siteOrigin = import.meta.env.VITE_SITE_ORIGIN || 'https://your-domain.example';
+    const url = `${siteOrigin}/?invite=${result.token}`;
     uni.setClipboardData({ data: url, success: () => uni.showToast({ title: '邀请链接已复制' }) });
   } catch (error) { showError(error); }
 }

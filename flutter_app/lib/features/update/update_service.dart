@@ -8,13 +8,14 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/app_config.dart';
 import '../../core/ui.dart';
 
 /// 公开的版本检查接口（无需登录）。
-const _versionUrl = 'https://your-domain.example/api/app/version';
+const _versionUrl = '$careApiBase/app/version';
 
 /// 非 Android 平台兜底跳转地址（应用商店或下载页）。
-const _fallbackUrl = 'https://your-domain.example/apk/';
+const _fallbackUrl = '$careOrigin/apk/';
 
 class UpdateInfo {
   UpdateInfo({
