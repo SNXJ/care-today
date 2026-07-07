@@ -3,12 +3,26 @@ import { onShow } from '@dcloudio/uni-app';
 import PageHero from '../../components/PageHero.vue';
 import ComposeFab from '../../components/ComposeFab.vue';
 import { useSession } from '../../state/session';
-import { formatDate, showError } from '../../utils/format';
+import { formatFull, showError } from '../../utils/format';
 const session = useSession();
 onShow(() => session.boot().catch(showError));
 </script>
 <template><view class="page"><PageHero eyebrow="SHARING" title="分享" subtitle="不是汇报病情，只是让关心你的人知道：此刻的你，在想什么。" :profile="session.isAuthed.value" />
   <view v-if="!session.hasSpace.value" class="card empty">登录并创建陪伴空间后，患者本人可以在这里分享近况。</view>
-  <view v-else-if="!session.data.messages.length" class="card empty">这里还很安静。患者本人可以分享第一条近况。</view>
-  <view v-for="message in session.data.messages" :key="message.id" class="card"><view class="card-title"><text>{{ message.author }}</text><text class="tag">{{ formatDate(message.createdAt) }}</text></view><text class="row-meta" style="color:#312b27;font-size:29rpx">{{ message.text }}</text></view>
-  <ComposeFab v-if="session.hasSpace.value && session.isPatient.value" type="message" /></view></template>
+  <view v-else class="card">
+    <view class="card-title"><text>分享</text><text class="tag">{{ session.isPatient.value ? '管理员可管理' : '成员都能发' }}</text></view>
+    <view v-if="!session.data.messages.length" class="empty">还没有分享。点右下角「＋」发布近况。</view>
+    <view v-for="m in session.data.messages" :key="m.id" class="moment-tile">
+      <text class="moment-text">{{ m.text }}</text>
+      <text class="moment-meta">{{ m.author || '家人' }} · {{ formatFull(m.createdAt) }}</text>
+    </view>
+  </view>
+  <ComposeFab v-if="session.hasSpace.value && session.isPatient.value" type="message" />
+</view></template>
+
+<style scoped lang="scss">
+.moment-tile { margin-bottom: 16rpx; padding: 22rpx; border: 1px solid #eadbca; border-radius: 20rpx; background: #fff7ee; }
+.moment-tile:last-child { margin-bottom: 0; }
+.moment-text { display: block; color: #312b27; font-size: 28rpx; line-height: 1.5; }
+.moment-meta { display: block; margin-top: 8rpx; color: #766b62; font-size: 22rpx; }
+</style>

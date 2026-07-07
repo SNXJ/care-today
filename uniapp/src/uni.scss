@@ -99,6 +99,29 @@ $amber: #c8893f;
 .score-pills { flex: 1; display: flex; flex-wrap: wrap; gap: 10rpx; }
 .score-pill { padding: 6rpx 16rpx; border-radius: 999rpx; background: #f3ece2; color: $ink; font-size: 23rpx; }
 
+/* —— 时间线：竖向轨道 + 彩色节点 + 卡片（对齐 Flutter）—— */
+.tl-sechead { display: flex; align-items: baseline; gap: 12rpx; margin: 6rpx 0 12rpx; }
+.tl-sechead .t { font-size: 28rpx; font-weight: 700; }
+.tl-sechead .s { color: $muted; font-size: 22rpx; }
+.tl-divider { display: flex; align-items: center; gap: 16rpx; margin: 18rpx 0; }
+.tl-divider .line { flex: 1; height: 1px; background: $line; }
+.tl-divider .label { color: $muted; font-size: 22rpx; }
+.tl-row { display: flex; align-items: stretch; }
+.tl-rail { position: relative; flex: 0 0 auto; width: 56rpx; }
+.tl-seg { position: absolute; left: 26rpx; width: 3rpx; background: #e5d8c8; }
+.tl-seg.top { top: 0; height: 52rpx; }
+.tl-seg.bottom { top: 52rpx; bottom: 0; }
+.tl-node { position: absolute; top: 32rpx; left: 8rpx; width: 40rpx; height: 40rpx; border-radius: 50%; background: $panel; border: 3rpx solid #ccc; display: flex; align-items: center; justify-content: center; }
+.tl-node .core { width: 14rpx; height: 14rpx; border-radius: 50%; }
+.tl-card { flex: 1; min-width: 0; margin-bottom: 20rpx; padding: 24rpx; border: 1px solid $line; border-radius: 24rpx; background: $panel; box-shadow: 0 10rpx 28rpx rgba(82,63,47,.05); }
+.tl-head { display: flex; align-items: center; gap: 10rpx; }
+.tl-date { font-size: 30rpx; font-weight: 800; }
+.tl-time { color: $muted; font-size: 22rpx; }
+.tl-type { margin-left: auto; padding: 4rpx 14rpx; border-radius: 999rpx; font-size: 20rpx; font-weight: 700; }
+.tl-title { display: block; margin-top: 12rpx; font-size: 29rpx; font-weight: 700; line-height: 1.4; }
+.tl-meta { display: block; margin-top: 6rpx; color: $muted; font-size: 24rpx; line-height: 1.5; }
+.tl-detail { display: block; margin-top: 6rpx; color: $muted; font-size: 23rpx; line-height: 1.5; }
+
 /* 今天页：联系医生要点 */
 .bullet-list { margin: 0; }
 .bullet { display: flex; gap: 8rpx; padding: 8rpx 0; color: $ink; font-size: 26rpx; line-height: 1.6; }
