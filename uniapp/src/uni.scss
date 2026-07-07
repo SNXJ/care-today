@@ -122,6 +122,12 @@ $amber: #c8893f;
 .tl-meta { display: block; margin-top: 6rpx; color: $muted; font-size: 24rpx; line-height: 1.5; }
 .tl-detail { display: block; margin-top: 6rpx; color: $muted; font-size: 23rpx; line-height: 1.5; }
 
+/* 今天页：复诊倒计时 */
+.countdown { margin-top: 20rpx; padding-top: 20rpx; border-top: 1px solid #f0e5d8; }
+.cd-label { color: $muted; font-size: 24rpx; }
+.cd-value { margin-left: 10rpx; font-size: 32rpx; font-weight: 700; }
+.cd-hint { display: block; margin-top: 8rpx; color: $muted; font-size: 22rpx; }
+
 /* 今天页：联系医生要点 */
 .bullet-list { margin: 0; }
 .bullet { display: flex; gap: 8rpx; padding: 8rpx 0; color: $ink; font-size: 26rpx; line-height: 1.6; }

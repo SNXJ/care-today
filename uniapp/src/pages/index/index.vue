@@ -17,6 +17,17 @@ const spaceForm = reactive({ name: '陪你一起过今天', patientNickname: '',
 const todayEvents = computed(() => session.data.events.filter((item) => dateKey(item.scheduledAt) === dateKey()));
 const activeNotices = computed(() => session.data.notices.filter((item) => item.status !== 'ARCHIVED' && (!item.startsOn || item.startsOn <= dateKey()) && (!item.endsOn || item.endsOn >= dateKey())));
 const nextEvent = computed(() => session.data.events.filter((item) => new Date(item.scheduledAt) > new Date()).sort((a, b) => +new Date(a.scheduledAt) - +new Date(b.scheduledAt))[0]);
+// 下次复诊倒计时：最近一个未过日程（含今天）距今的天数
+const nextVisitCountdown = computed(() => {
+  const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0);
+  const future = session.data.events
+    .map((e: any) => new Date(e.scheduledAt))
+    .filter((d: Date) => !Number.isNaN(d.getTime()) && d.getTime() >= startOfToday.getTime())
+    .sort((a: Date, b: Date) => a.getTime() - b.getTime());
+  if (!future.length) return null;
+  const day = new Date(future[0].getFullYear(), future[0].getMonth(), future[0].getDate());
+  return Math.round((day.getTime() - startOfToday.getTime()) / 86400000);
+});
 const todayMedications = computed(() => session.data.medications
   .filter((m: any) => dateKey(m.takenAt) === dateKey())
   .sort((a: any, b: any) => +new Date(a.takenAt) - +new Date(b.takenAt)));
@@ -123,9 +134,14 @@ function openLegal(path: 'user-agreement' | 'privacy-policy') {
       </view>
 
       <view class="card">
-        <view class="card-title"><text>今天要做的事</text><text class="tag">{{ todayEvents.length }} 项</text></view>
+        <view class="card-title"><text>今天要做的事</text><text class="tag">下次复诊：{{ nextEvent ? formatDate(nextEvent.scheduledAt) : '待添加' }}</text></view>
         <view v-if="!todayEvents.length" class="empty">今天没有排好的日程。给自己留一点从容，也很好。</view>
         <view v-for="event in todayEvents" :key="event.id" class="row"><view class="dot" /><view class="row-main"><text class="row-title">{{ event.title }}</text><text class="row-meta">{{ formatDate(event.scheduledAt) }} · {{ event.location || '地点待补充' }}{{ event.needsCompanion ? ' · 需要陪同' : '' }}</text></view></view>
+        <view class="countdown">
+          <text class="cd-label">距离下次复诊</text>
+          <text class="cd-value">{{ nextVisitCountdown === null ? '—' : nextVisitCountdown + ' 天' }}</text>
+          <text class="cd-hint">{{ nextVisitCountdown === null ? '还没有安排日程。' : nextVisitCountdown === 0 ? '今天，把资料和问题带上。' : '提前整理资料和问题。' }}</text>
+        </view>
       </view>
 
       <view class="card">
