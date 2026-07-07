@@ -9,13 +9,13 @@ import { dateKey, formatDay, formatTime, showError } from '../../utils/format';
 const session = useSession();
 onShow(() => session.boot().catch(showError));
 
-// 各类型的强调色（对齐 Flutter：日程/分享=玫瑰，问医生=蓝，资料=草绿，注意=琥珀）
-const accents: Record<string, { c: string; soft: string }> = {
-  日程: { c: '#b85f55', soft: 'rgba(184,95,85,0.12)' },
-  分享: { c: '#b85f55', soft: 'rgba(184,95,85,0.12)' },
-  问医生: { c: '#5b7c99', soft: 'rgba(91,124,153,0.14)' },
-  资料: { c: '#71836a', soft: 'rgba(113,131,106,0.14)' },
-  注意: { c: '#c8893f', soft: 'rgba(200,137,63,0.14)' },
+// 各类型的强调色与线稿图标（对齐 Flutter：日程/分享=玫瑰，问医生=蓝，资料=草绿，注意=琥珀）
+const accents: Record<string, { c: string; soft: string; icon: string }> = {
+  日程: { c: '#b85f55', soft: 'rgba(184,95,85,0.12)', icon: '/static/timeline/event.svg' },
+  分享: { c: '#b85f55', soft: 'rgba(184,95,85,0.12)', icon: '/static/timeline/message.svg' },
+  问医生: { c: '#5b7c99', soft: 'rgba(91,124,153,0.14)', icon: '/static/timeline/question.svg' },
+  资料: { c: '#71836a', soft: 'rgba(113,131,106,0.14)', icon: '/static/timeline/note.svg' },
+  注意: { c: '#c8893f', soft: 'rgba(200,137,63,0.14)', icon: '/static/timeline/notice.svg' },
 };
 
 function rangeLabel(n: any) {
@@ -71,7 +71,7 @@ function showDetail(item: any) {
         <view class="tl-rail">
           <view v-if="i !== 0" class="tl-seg top" />
           <view v-if="i !== futureItems.length - 1" class="tl-seg bottom" />
-          <view class="tl-node" :style="{ borderColor: item.accent.c }"><view class="core" :style="{ background: item.accent.c }" /></view>
+          <view class="tl-node" :style="{ borderColor: item.accent.c }"><image class="tl-icon" :src="item.accent.icon" mode="aspectFit" /></view>
         </view>
         <view class="tl-card">
           <view class="tl-head"><text class="tl-date" :style="{ color: item.accent.c }">{{ item.dateLabel }}</text><text class="tl-time">{{ item.timeLabel }}</text><text class="tl-type" :style="{ color: item.accent.c, background: item.accent.soft }">{{ item.type }}</text></view>
@@ -91,7 +91,7 @@ function showDetail(item: any) {
       <view class="tl-rail">
         <view v-if="i !== 0" class="tl-seg top" />
         <view v-if="i !== pastItems.length - 1" class="tl-seg bottom" />
-        <view class="tl-node" :style="{ borderColor: item.accent.c }"><view class="core" :style="{ background: item.accent.c }" /></view>
+        <view class="tl-node" :style="{ borderColor: item.accent.c }"><image class="tl-icon" :src="item.accent.icon" mode="aspectFit" /></view>
       </view>
       <view class="tl-card">
         <view class="tl-head"><text class="tl-date" :style="{ color: item.accent.c }">{{ item.dateLabel }}</text><text class="tl-time">{{ item.timeLabel }}</text><text class="tl-type" :style="{ color: item.accent.c, background: item.accent.soft }">{{ item.type }}</text></view>

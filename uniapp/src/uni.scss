@@ -111,8 +111,9 @@ $amber: #c8893f;
 .tl-seg { position: absolute; left: 26rpx; width: 3rpx; background: #e5d8c8; }
 .tl-seg.top { top: 0; height: 52rpx; }
 .tl-seg.bottom { top: 52rpx; bottom: 0; }
-.tl-node { position: absolute; top: 32rpx; left: 8rpx; width: 40rpx; height: 40rpx; border-radius: 50%; background: $panel; border: 3rpx solid #ccc; display: flex; align-items: center; justify-content: center; }
+.tl-node { position: absolute; top: 30rpx; left: 6rpx; width: 44rpx; height: 44rpx; border-radius: 50%; background: $panel; border: 3rpx solid #ccc; display: flex; align-items: center; justify-content: center; }
 .tl-node .core { width: 14rpx; height: 14rpx; border-radius: 50%; }
+.tl-icon { width: 24rpx; height: 24rpx; }
 .tl-card { flex: 1; min-width: 0; margin-bottom: 20rpx; padding: 24rpx; border: 1px solid $line; border-radius: 24rpx; background: $panel; box-shadow: 0 10rpx 28rpx rgba(82,63,47,.05); }
 .tl-head { display: flex; align-items: center; gap: 10rpx; }
 .tl-date { font-size: 30rpx; font-weight: 800; }
