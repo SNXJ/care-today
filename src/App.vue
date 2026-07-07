@@ -76,6 +76,9 @@ const symptomFormOpen = ref(false);
 const symptomPresets = ['大便', '腹泻', '发烧', '乏力', '疼痛', '手脚发麻'];
 const symptomDraft = ref({ tag: '', customTag: '', happenedAt: '', note: '' });
 const symptoms = ref([]);
+const medicationFormOpen = ref(false);
+const medicationDraft = ref({ name: '', customName: '', dosage: '', takenAt: '', note: '' });
+const medications = ref([]);
 const detailItem = ref(null);
 const detailEditing = ref(false);
 const detailEditValues = ref({});
@@ -171,6 +174,23 @@ const filterSymptoms = (items) => (
 );
 const filteredTodaySymptoms = computed(() => filterSymptoms(todaySymptoms.value));
 const filteredRecentSymptoms = computed(() => filterSymptoms(recentSymptoms.value));
+const todayMedications = computed(() => medications.value.filter((item) => item.dateKey === todayKey.value));
+const recentMedications = computed(() => {
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  return medications.value.filter(
+    (item) => item.dateKey !== todayKey.value && new Date(item.takenAt) >= cutoff
+  );
+});
+// 最近用过的药名做成快捷标签，方便一键再记
+const medicationNameOptions = computed(() => {
+  const names = [];
+  for (const item of medications.value) {
+    if (item.name && !names.includes(item.name)) names.push(item.name);
+    if (names.length >= 8) break;
+  }
+  return names;
+});
 const upcomingEvents = computed(() =>
   events.value.slice().sort((a, b) => new Date(a.scheduledAt) - new Date(b.scheduledAt))
 );
@@ -755,6 +775,23 @@ function openManage(kind, raw) {
         { label: '删除', danger: true, run: () => deleteSymptom(raw) },
       ],
     };
+  } else if (kind === 'medication') {
+    descriptor = {
+      kind,
+      raw,
+      eyebrow: '用药记录',
+      title: raw.name,
+      icon: iconBody,
+      lines: [
+        { label: '剂量', value: raw.dosage || '未填写' },
+        { label: '服用时间', value: raw.timeLabel },
+        { label: '备注', value: raw.note || '没有备注' },
+      ],
+      actions: [
+        { label: '编辑', run: () => editMedication(raw) },
+        { label: '删除', danger: true, run: () => deleteMedication(raw) },
+      ],
+    };
   } else {
     return;
   }
@@ -936,6 +973,7 @@ function logout(options = {}) {
   notes.value = [];
   notices.value = [];
   symptoms.value = [];
+  medications.value = [];
   members.value = [];
   currentRole.value = '';
   localStorage.removeItem('care-today-token');
@@ -978,7 +1016,7 @@ async function selectSpace(spaceId) {
   members.value = (detail.members || []).map(mapMember);
   currentRole.value = detail.currentRole || '';
   localStorage.setItem('care-today-role', currentRole.value);
-  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadMessages(), loadNotes(), loadNotices(), loadSymptoms()]);
+  await Promise.all([loadEvents(), loadBodyRecords(), loadQuestions(), loadMessages(), loadNotes(), loadNotices(), loadSymptoms(), loadMedications()]);
 }
 
 async function loadEvents() {
@@ -1023,6 +1061,10 @@ async function loadNotices() {
 
 async function loadSymptoms() {
   symptoms.value = (await api.listSymptoms(activeSpaceId.value)).map(mapSymptom);
+}
+
+async function loadMedications() {
+  medications.value = (await api.listMedications(activeSpaceId.value)).map(mapMedication);
 }
 
 function openBodyForm() {
@@ -1236,6 +1278,82 @@ async function deleteSymptom(symptom) {
   });
 }
 
+function openMedicationForm() {
+  medicationDraft.value = {
+    name: medicationNameOptions.value.length ? '' : '__custom__',
+    customName: '',
+    dosage: '',
+    takenAt: nowLocalInput(),
+    note: '',
+  };
+  medicationFormOpen.value = true;
+}
+
+async function addMedication() {
+  const name = (medicationDraft.value.name === '__custom__' ? medicationDraft.value.customName : medicationDraft.value.name).trim();
+  if (!name) {
+    showToast('先选一个药名，或自己写一个');
+    return;
+  }
+  if (!medicationDraft.value.takenAt) {
+    showToast('选一下服用时间');
+    return;
+  }
+  await withLoading(async () => {
+    await api.createMedication(activeSpaceId.value, {
+      name,
+      dosage: medicationDraft.value.dosage.trim() || undefined,
+      takenAt: new Date(medicationDraft.value.takenAt).toISOString(),
+      note: medicationDraft.value.note.trim() || undefined,
+    });
+    medicationFormOpen.value = false;
+    await loadMedications();
+    showToast(`已记录用药：${name}`);
+  });
+}
+
+async function editMedication(log) {
+  const values = await openFormDialog({
+    eyebrow: '用药记录',
+    title: `编辑「${log.name}」`,
+    icon: iconBody,
+    fields: [
+      { name: 'name', label: '药名', value: log.name, required: true },
+      { name: 'dosage', label: '剂量', value: log.dosage || '', placeholder: '例如：1 片 / 200mg' },
+      { name: 'takenAt', label: '服用时间', value: toLocalInputDateTime(log.takenAt), required: true, type: 'datetime-local' },
+      { name: 'note', label: '备注', value: log.note || '', type: 'textarea' },
+    ],
+  });
+  if (!values) return;
+  await withLoading(async () => {
+    await api.updateMedication(activeSpaceId.value, log.id, {
+      name: values.name.trim(),
+      dosage: values.dosage?.trim() || '',
+      takenAt: new Date(values.takenAt).toISOString(),
+      note: values.note ?? log.note ?? '',
+    });
+    await loadMedications();
+    showToast('用药记录已更新');
+  });
+}
+
+async function deleteMedication(log) {
+  const confirmed = await openConfirmDialog({
+    eyebrow: '删除用药记录',
+    title: `删除「${log.name}」这条记录？`,
+    message: log.timeLabel,
+    icon: iconBody,
+    confirmText: '删除',
+    danger: true,
+  });
+  if (!confirmed) return;
+  await withLoading(async () => {
+    await api.deleteMedication(activeSpaceId.value, log.id);
+    await loadMedications();
+    showToast('用药记录已删除');
+  });
+}
+
 async function addQuestion() {
   if (!questionDraft.value.trim()) {
     showToast('先写下想问医生的问题');
@@ -1386,6 +1504,7 @@ const composerActions = [
   { id: 'temperature', label: '记体温', desc: '测量时间和数值', icon: iconBody, bodyRelated: true },
   { id: 'weight', label: '记体重', desc: '日期和数值', icon: iconBody, bodyRelated: true },
   { id: 'symptom', label: '记症状', desc: '症状和发生时间', icon: iconBody, bodyRelated: true },
+  { id: 'medication', label: '记用药', desc: '吃了什么药、何时吃', icon: iconBody, bodyRelated: true },
   { id: 'notice', label: '记注意事项', desc: '有效期内置顶', icon: iconWarning, bodyRelated: false },
   { id: 'question', label: '问医生的问题', desc: '复诊前确认', icon: iconDoctor, bodyRelated: false },
   { id: 'note', label: '存一条资料', desc: '报告、用药、医嘱', icon: iconFolder, bodyRelated: false },
@@ -1393,7 +1512,7 @@ const composerActions = [
 
 const composerScope = {
   moments: ['message'],
-  body: ['bodyRecord', 'temperature', 'weight', 'symptom'],
+  body: ['bodyRecord', 'temperature', 'weight', 'symptom', 'medication'],
   notices: ['notice'],
 };
 const visibleComposerActions = computed(() =>
@@ -1440,6 +1559,10 @@ async function runComposerAction(action) {
   }
   if (action.id === 'symptom') {
     openSymptomForm();
+    return;
+  }
+  if (action.id === 'medication') {
+    openMedicationForm();
     return;
   }
   if (action.id === 'notice') {
@@ -1877,6 +2000,21 @@ function mapSymptom(symptom) {
   };
 }
 
+function mapMedication(log) {
+  const taken = new Date(log.takenAt);
+  return {
+    id: log.id,
+    name: log.name,
+    dosage: log.dosage || '',
+    note: log.note || '',
+    takenAt: log.takenAt,
+    dateKey: toDateKey(taken),
+    timeLabel: taken.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    clock: taken.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+    createdAt: log.createdAt,
+  };
+}
+
 function mapNotice(notice) {
   return {
     id: notice.id,
@@ -2109,6 +2247,30 @@ function mapMember(member) {
                 <button class="small-btn" type="button" @click="questionsOpen = true">问题清单</button>
                 <button class="small-btn" type="button" @click="folderOpen = true">复诊资料</button>
               </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <header class="card-header">
+              <div class="card-title">
+                <span class="title-icon rose"><img :src="iconBody" alt="" aria-hidden="true" /></span>
+                <h2>今天的用药</h2>
+              </div>
+              <span class="tag">{{ todayMedications.length ? `已记 ${todayMedications.length} 次` : '还没记录' }}</span>
+            </header>
+            <div class="card-body">
+              <p v-if="!todayMedications.length" class="empty-note">今天还没有用药记录。吃过药就记一笔，别漏了也别重复吃。</p>
+              <div v-else class="symptom-list">
+                <button v-for="log in todayMedications" :key="log.id" class="symptom-row" type="button" @click="openManage('medication', log)">
+                  <strong class="time">{{ log.clock }}</strong>
+                  <div>
+                    <strong>{{ log.name }}<template v-if="log.dosage">（{{ log.dosage }}）</template></strong>
+                    <span v-if="log.note">{{ log.note }}</span>
+                  </div>
+                  <span class="chevron">›</span>
+                </button>
+              </div>
+              <button class="small-btn sage" type="button" @click="openMedicationForm">记一次服药</button>
             </div>
           </article>
 
@@ -2377,6 +2539,47 @@ function mapMember(member) {
         <article class="card">
           <header class="card-header">
             <div class="card-title">
+              <span class="title-icon rose"><img :src="iconBody" alt="" aria-hidden="true" /></span>
+              <h2>用药记录</h2>
+            </div>
+            <span class="tag">{{ todayMedications.length ? `今天 ${todayMedications.length} 次` : '今天还没记' }}</span>
+          </header>
+          <div class="card-body">
+            <p v-if="!todayMedications.length && !recentMedications.length" class="empty-note">
+              还没有用药记录。点右下角「+」记一次服药，别忘了吃药。
+            </p>
+            <template v-if="todayMedications.length">
+              <h3 class="symptom-subhead">今天</h3>
+              <div class="symptom-list">
+                <button v-for="log in todayMedications" :key="log.id" class="symptom-row" type="button" @click="openManage('medication', log)">
+                  <strong class="time">{{ log.clock }}</strong>
+                  <div>
+                    <strong>{{ log.name }}</strong>
+                    <span v-if="log.dosage || log.note">{{ [log.dosage, log.note].filter(Boolean).join(' · ') }}</span>
+                  </div>
+                  <span class="chevron">›</span>
+                </button>
+              </div>
+            </template>
+            <template v-if="recentMedications.length">
+              <h3 class="symptom-subhead">最近 7 天</h3>
+              <div class="symptom-list">
+                <button v-for="log in recentMedications" :key="log.id" class="symptom-row past" type="button" @click="openManage('medication', log)">
+                  <strong class="time">{{ log.timeLabel }}</strong>
+                  <div>
+                    <strong>{{ log.name }}</strong>
+                    <span v-if="log.dosage || log.note">{{ [log.dosage, log.note].filter(Boolean).join(' · ') }}</span>
+                  </div>
+                  <span class="chevron">›</span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </article>
+
+        <article class="card">
+          <header class="card-header">
+            <div class="card-title">
               <span class="title-icon sage"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>评分记录</h2>
             </div>
@@ -2576,6 +2779,59 @@ function mapMember(member) {
         <div class="confirm-actions">
           <button class="small-btn" type="button" @click="symptomFormOpen = false">取消</button>
           <button class="small-btn sage" type="button" :disabled="loading" @click="addSymptom">记下来</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="medicationFormOpen" class="modal-backdrop" role="presentation" @click.self="medicationFormOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="medicationform-title">
+        <div class="confirm-icon accent-amber">
+          <img :src="iconBody" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">吃了什么药、什么时候吃的</p>
+          <h2 id="medicationform-title">记一次服药</h2>
+          <div v-if="medicationNameOptions.length" class="symptom-tags">
+            <button
+              v-for="name in medicationNameOptions"
+              :key="name"
+              class="trend-chip"
+              :class="{ active: medicationDraft.name === name }"
+              type="button"
+              @click="medicationDraft.name = name"
+            >
+              {{ name }}
+            </button>
+            <button
+              class="trend-chip"
+              :class="{ active: medicationDraft.name === '__custom__' }"
+              type="button"
+              @click="medicationDraft.name = '__custom__'"
+            >
+              新药名…
+            </button>
+          </div>
+          <div v-if="medicationDraft.name === '__custom__' || !medicationNameOptions.length" class="form-row">
+            <input v-model="medicationDraft.customName" type="text" placeholder="药名，例如：布洛芬" />
+          </div>
+          <div class="dialog-fields">
+            <label class="dialog-field">
+              <span>剂量（可不填）</span>
+              <input v-model="medicationDraft.dosage" type="text" placeholder="例如：1 片 / 200mg" />
+            </label>
+            <label class="dialog-field">
+              <span>服用时间</span>
+              <input v-model="medicationDraft.takenAt" type="datetime-local" />
+            </label>
+            <label class="dialog-field">
+              <span>备注（可不填）</span>
+              <input v-model="medicationDraft.note" type="text" placeholder="例如：饭后服用" />
+            </label>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn" type="button" @click="medicationFormOpen = false">取消</button>
+          <button class="small-btn sage" type="button" :disabled="loading" @click="addMedication">记下来</button>
         </div>
       </section>
     </div>

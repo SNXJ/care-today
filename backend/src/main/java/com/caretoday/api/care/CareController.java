@@ -6,6 +6,7 @@ import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateDoctorQuestionRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
+import com.caretoday.api.care.CareRequests.CreateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
@@ -17,6 +18,7 @@ import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateDoctorQuestionRequest;
 import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
+import com.caretoday.api.care.CareRequests.UpdateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
@@ -250,6 +252,27 @@ public class CareController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteSymptomEvent(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID symptomId) {
     careService.deleteSymptomEvent(currentUser(httpRequest).id(), spaceId, symptomId);
+  }
+
+  @GetMapping("/spaces/{spaceId}/medications")
+  public Object listMedicationLogs(HttpServletRequest httpRequest, @PathVariable UUID spaceId) {
+    return careService.listMedicationLogs(currentUser(httpRequest).id(), spaceId);
+  }
+
+  @PostMapping("/spaces/{spaceId}/medications")
+  public Object createMedicationLog(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @Valid @RequestBody CreateMedicationLogRequest request) {
+    return careService.createMedicationLog(currentUser(httpRequest).id(), spaceId, request);
+  }
+
+  @PatchMapping("/spaces/{spaceId}/medications/{logId}")
+  public Object updateMedicationLog(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID logId, @Valid @RequestBody UpdateMedicationLogRequest request) {
+    return careService.updateMedicationLog(currentUser(httpRequest).id(), spaceId, logId, request);
+  }
+
+  @DeleteMapping("/spaces/{spaceId}/medications/{logId}")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void deleteMedicationLog(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID logId) {
+    careService.deleteMedicationLog(currentUser(httpRequest).id(), spaceId, logId);
   }
 
   @GetMapping("/spaces/{spaceId}/notices")

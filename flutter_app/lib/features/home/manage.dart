@@ -59,6 +59,21 @@ Future<void> manageMessage(BuildContext context, SessionController s, Map m) {
       ]);
 }
 
+Future<void> manageMedication(BuildContext context, SessionController s, Map m) {
+  return showManageSheet(context,
+      eyebrow: '用药记录',
+      title: m['name']?.toString() ?? '',
+      lines: [
+        ManageLine('剂量', (m['dosage'] ?? '未填写').toString()),
+        ManageLine('服用时间', formatMonthDayTime(m['takenAt'])),
+        ManageLine('备注', (m['note'] ?? '没有备注').toString()),
+      ],
+      actions: [
+        ManageAction('编辑', () => editMedication(context, s, m)),
+        ManageAction('删除', () => deleteMedication(context, s, m), danger: true),
+      ]);
+}
+
 Future<void> manageSymptom(BuildContext context, SessionController s, Map sy) {
   return showManageSheet(context,
       eyebrow: '症状记录',

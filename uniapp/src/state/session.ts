@@ -15,6 +15,7 @@ const data = reactive({
   questions: [] as any[],
   messages: [] as any[],
   symptoms: [] as any[],
+  medications: [] as any[],
   notices: [] as any[],
   notes: [] as any[],
 });
@@ -36,9 +37,9 @@ async function selectSpace(id: string) {
   data.currentRole = detail.currentRole || '';
   const results = await Promise.all([
     api.listEvents(id), api.listBody(id), api.listQuestions(id), api.listMessages(id),
-    api.listSymptoms(id), api.listNotices(id), api.listNotes(id),
+    api.listSymptoms(id), api.listNotices(id), api.listNotes(id), api.listMedications(id),
   ]);
-  [data.events, data.body, data.questions, data.messages, data.symptoms, data.notices, data.notes] = results;
+  [data.events, data.body, data.questions, data.messages, data.symptoms, data.notices, data.notes, data.medications] = results;
 }
 
 async function load() {
@@ -79,7 +80,7 @@ async function createSpace(form: any) {
 }
 
 function logout(relaunch = true) {
-  Object.assign(data, { token: '', user: null, spaces: [], space: null, members: [], currentRole: '', events: [], body: [], questions: [], messages: [], symptoms: [], notices: [], notes: [], ready: true });
+  Object.assign(data, { token: '', user: null, spaces: [], space: null, members: [], currentRole: '', events: [], body: [], questions: [], messages: [], symptoms: [], medications: [], notices: [], notes: [], ready: true });
   ['care-today-token', 'care-today-user', 'care-today-space-id'].forEach((key) => uni.removeStorageSync(key));
   if (relaunch) uni.reLaunch({ url: '/pages/index/index' });
 }

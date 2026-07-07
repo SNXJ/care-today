@@ -47,13 +47,19 @@ class TrendChart extends StatelessWidget {
         list.add(MapEntry(at, v));
       }
       list.sort((a, b) => a.key.compareTo(b.key));
-      return list
-          .map((e) => _Point(
-              metric == '体温'
-                  ? formatMonthDayTime(e.key.toIso8601String())
-                  : formatDateLabel(e.key),
-              e.value))
-          .toList();
+      if (metric == '体温') {
+        // 两行标签：首行日期、次行时间；同一天的后续点只显示时间，避免横向重叠
+        String? lastDay;
+        return list.map((e) {
+          final day = formatDateLabel(e.key);
+          final time =
+              '${e.key.hour.toString().padLeft(2, '0')}:${e.key.minute.toString().padLeft(2, '0')}';
+          final label = day == lastDay ? '\n$time' : '$day\n$time';
+          lastDay = day;
+          return _Point(label, e.value);
+        }).toList();
+      }
+      return list.map((e) => _Point(formatDateLabel(e.key), e.value)).toList();
     }
     // score：每天保留最近一次非空值
     final byDay = <String, double>{};
@@ -80,7 +86,8 @@ class TrendChart extends StatelessWidget {
     if (!hasData) {
       return emptyNote('最近$days天还没有$metric记录。');
     }
-    final width = (points.length * 34 + 54).clamp(320, 1600).toDouble();
+    final perPoint = metric == '体温' ? 46 : 34;
+    final width = (points.length * perPoint + 54).clamp(320, 1600).toDouble();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -232,6 +239,7 @@ class _TrendPainter extends CustomPainter {
       {bool center = false, bool alignRight = false}) {
     final tp = TextPainter(
         text: TextSpan(text: text, style: style),
+        textAlign: center ? TextAlign.center : TextAlign.start,
         textDirection: TextDirection.ltr)
       ..layout();
     var dx = at.dx;

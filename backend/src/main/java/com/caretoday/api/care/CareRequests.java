@@ -75,6 +75,18 @@ public final class CareRequests {
       Instant happenedAt,
       String note) {}
 
+  public record CreateMedicationLogRequest(
+      @NotBlank String name,
+      String dosage,
+      @NotNull Instant takenAt,
+      String note) {}
+
+  public record UpdateMedicationLogRequest(
+      String name,
+      String dosage,
+      Instant takenAt,
+      String note) {}
+
   public record CreateDoctorQuestionRequest(
       @NotBlank String question,
       boolean important) {}

@@ -19,8 +19,9 @@ const items = computed(() => [
 ].filter((x) => x.at).sort((a, b) => +new Date(b.at) - +new Date(a.at)));
 </script>
 
-<template><view class="page"><PageHero eyebrow="TIMELINE" title="时间线" subtitle="未来的安排和走过的日子，都在这里慢慢连起来。" />
+<template><view class="page"><PageHero eyebrow="TIMELINE" title="时间线" subtitle="未来的安排和走过的日子，都在这里慢慢连起来。" :profile="session.isAuthed.value" />
   <view class="card"><view class="card-title"><text>全部记录</text><text class="tag">{{ items.length }} 条</text></view>
-    <view v-if="!items.length" class="empty">还没有记录。点右下角「＋」添加第一条。</view>
+    <view v-if="!session.hasSpace.value" class="empty">登录并创建陪伴空间后，这里会汇总全部记录。</view>
+    <view v-else-if="!items.length" class="empty">还没有记录。点右下角「＋」添加第一条。</view>
     <view v-for="item in items" :key="item.id" class="row"><view class="dot" /><view class="row-main"><text class="row-title">{{ item.title }}</text><text class="row-meta">{{ item.type }} · {{ formatDate(item.at) }} · {{ item.meta }}</text></view></view>
-  </view><ComposeFab /></view></template>
+  </view><ComposeFab v-if="session.hasSpace.value" /></view></template>

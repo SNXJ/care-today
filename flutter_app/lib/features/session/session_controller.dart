@@ -16,6 +16,7 @@ class SessionController extends ChangeNotifier {
       questions = [],
       messages = [],
       symptoms = [],
+      medications = [],
       notices = [],
       notes = [];
   bool get authenticated => api.token != null;
@@ -90,7 +91,8 @@ class SessionController extends ChangeNotifier {
       api.list('/spaces/$id/messages'),
       api.list('/spaces/$id/symptoms'),
       api.list('/spaces/$id/notices'),
-      api.list('/spaces/$id/notes')
+      api.list('/spaces/$id/notes'),
+      api.list('/spaces/$id/medications')
     ]);
     events = results[0];
     body = results[1];
@@ -99,6 +101,7 @@ class SessionController extends ChangeNotifier {
     symptoms = results[4];
     notices = results[5];
     notes = results[6];
+    medications = results[7];
     notifyListeners();
   }
 
@@ -129,6 +132,11 @@ class SessionController extends ChangeNotifier {
 
   Future<void> reloadSymptoms() async {
     symptoms = await api.list('/spaces/$spaceId/symptoms');
+    notifyListeners();
+  }
+
+  Future<void> reloadMedications() async {
+    medications = await api.list('/spaces/$spaceId/medications');
     notifyListeners();
   }
 
@@ -172,6 +180,7 @@ class SessionController extends ChangeNotifier {
     questions = [];
     messages = [];
     symptoms = [];
+    medications = [];
     notices = [];
     notes = [];
     currentRole = '';

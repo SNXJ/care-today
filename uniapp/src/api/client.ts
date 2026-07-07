@@ -1,13 +1,14 @@
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://your-domain.example/api';
 
-type RequestOptions = { method?: UniApp.RequestOptions['method']; data?: any };
+type RequestMethod = UniApp.RequestOptions['method'] | 'PATCH';
+type RequestOptions = { method?: RequestMethod; data?: any };
 
 async function request<T = any>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = uni.getStorageSync('care-today-token');
   return new Promise((resolve, reject) => {
     uni.request({
       url: `${API_BASE}${path}`,
-      method: options.method || 'GET',
+      method: (options.method || 'GET') as UniApp.RequestOptions['method'],
       data: options.data,
       header: {
         'Content-Type': 'application/json',
@@ -37,6 +38,9 @@ export const api = {
   createSpace: (data: any) => request('/spaces', { method: 'POST', data }),
   getSpace: (id: string) => request<any>(`/spaces/${id}`),
   createInvite: (id: string, data: any) => request<any>(`/spaces/${id}/member-invites`, { method: 'POST', data }),
+  removeMember: (spaceId: string, memberId: string) => request(`/spaces/${spaceId}/members/${memberId}`, { method: 'DELETE' }),
+  leaveSpace: (spaceId: string) => request(`/spaces/${spaceId}/leave`, { method: 'DELETE' }),
+  deleteAccount: () => request('/account', { method: 'DELETE' }),
   listEvents: (id: string) => request<any[]>(`/spaces/${id}/events`),
   createEvent: (id: string, data: any) => request(`/spaces/${id}/events`, { method: 'POST', data }),
   listBody: (id: string) => request<any[]>(`/spaces/${id}/body-records`),
@@ -47,8 +51,12 @@ export const api = {
   createMessage: (id: string, data: any) => request(`/spaces/${id}/messages`, { method: 'POST', data }),
   listSymptoms: (id: string) => request<any[]>(`/spaces/${id}/symptoms`),
   createSymptom: (id: string, data: any) => request(`/spaces/${id}/symptoms`, { method: 'POST', data }),
+  listMedications: (id: string) => request<any[]>(`/spaces/${id}/medications`),
+  createMedication: (id: string, data: any) => request(`/spaces/${id}/medications`, { method: 'POST', data }),
   listNotices: (id: string) => request<any[]>(`/spaces/${id}/notices`),
   createNotice: (id: string, data: any) => request(`/spaces/${id}/notices`, { method: 'POST', data }),
+  updateNotice: (spaceId: string, noticeId: string, data: any) => request(`/spaces/${spaceId}/notices/${noticeId}`, { method: 'PATCH', data }),
+  deleteNotice: (spaceId: string, noticeId: string) => request(`/spaces/${spaceId}/notices/${noticeId}`, { method: 'DELETE' }),
   listNotes: (id: string) => request<any[]>(`/spaces/${id}/notes`),
   createNote: (id: string, data: any) => request(`/spaces/${id}/notes`, { method: 'POST', data }),
 };

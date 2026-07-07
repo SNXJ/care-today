@@ -11,6 +11,7 @@ import com.caretoday.api.care.CareModels.MemberStatus;
 import com.caretoday.api.care.CareModels.SpaceInvite;
 import com.caretoday.api.care.CareModels.SpaceMember;
 import com.caretoday.api.care.CareModels.SupportMessage;
+import com.caretoday.api.care.CareModels.MedicationLog;
 import com.caretoday.api.care.CareModels.SymptomEvent;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateDoctorQuestionRequest;
@@ -19,6 +20,7 @@ import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.CreateMessageRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
+import com.caretoday.api.care.CareRequests.CreateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.CreateSymptomEventRequest;
 import com.caretoday.api.care.CareRequests.CreateSpaceRequest;
 import com.caretoday.api.care.CareRequests.AcceptInviteRequest;
@@ -30,6 +32,7 @@ import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
+import com.caretoday.api.care.CareRequests.UpdateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import java.util.List;
 import java.util.Map;
@@ -389,6 +392,34 @@ public class CareService {
       throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Symptom event not found");
     }
     careRepository.audit(spaceId, currentUserId, "symptom.delete", "symptom_event", symptomId);
+  }
+
+  public List<MedicationLog> listMedicationLogs(UUID currentUserId, UUID spaceId) {
+    ensureActiveMember(spaceId, currentUserId);
+    return careRepository.listMedicationLogs(spaceId);
+  }
+
+  public MedicationLog createMedicationLog(UUID currentUserId, UUID spaceId, CreateMedicationLogRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    MedicationLog log = careRepository.createMedicationLog(spaceId, currentUserId, request);
+    careRepository.audit(spaceId, currentUserId, "medication.create", "medication_log", log.id());
+    return log;
+  }
+
+  public MedicationLog updateMedicationLog(UUID currentUserId, UUID spaceId, UUID logId, UpdateMedicationLogRequest request) {
+    ensureActiveMember(spaceId, currentUserId);
+    MedicationLog log = careRepository.updateMedicationLog(spaceId, logId, request)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Medication log not found"));
+    careRepository.audit(spaceId, currentUserId, "medication.update", "medication_log", log.id());
+    return log;
+  }
+
+  public void deleteMedicationLog(UUID currentUserId, UUID spaceId, UUID logId) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (!careRepository.deleteMedicationLog(spaceId, logId)) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Medication log not found");
+    }
+    careRepository.audit(spaceId, currentUserId, "medication.delete", "medication_log", logId);
   }
 
   private void ensureActiveMember(UUID spaceId, UUID currentUserId) {

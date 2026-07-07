@@ -24,6 +24,8 @@ const _actions = [
       'weight', '记体重', '日期和数值', Icons.monitor_weight_outlined, amber),
   _ComposerAction('symptom', '记症状', '症状和发生时间', Icons.healing_outlined, sage),
   _ComposerAction(
+      'medication', '记用药', '吃了什么药、何时吃', Icons.medication_outlined, _blue),
+  _ComposerAction(
       'notice', '记注意事项', '有效期内置顶', Icons.warning_amber_outlined, amber),
   _ComposerAction('question', '问医生的问题', '复诊前确认', Icons.help_outline, _blue),
   _ComposerAction('note', '存一条资料', '报告、用药、医嘱', Icons.folder_outlined, sage),
@@ -31,7 +33,7 @@ const _actions = [
 
 const _scope = {
   'moments': ['message'],
-  'body': ['bodyRecord', 'temperature', 'weight', 'symptom'],
+  'body': ['bodyRecord', 'temperature', 'weight', 'symptom', 'medication'],
   'notices': ['notice'],
 };
 
@@ -63,6 +65,8 @@ Future<void> openComposer(
       await addWeight(context, s);
     case 'symptom':
       await openSymptomForm(context, s);
+    case 'medication':
+      await addMedication(context, s);
     case 'notice':
       await addNotice(context, s);
     case 'question':

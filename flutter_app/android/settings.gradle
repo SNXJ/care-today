@@ -21,6 +21,10 @@ pluginManagement {
     }
 
     repositories {
+        // 阿里云镜像优先：直连 dl.google.com 会被网络重置
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
         google()
         mavenCentral()
         gradlePluginPortal()

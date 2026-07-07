@@ -417,6 +417,84 @@ Future<void> deleteSymptom(
   });
 }
 
+// ——————————————————— 用药记录 ———————————————————
+Future<void> addMedication(BuildContext context, SessionController s) async {
+  final values = await showForm(context,
+      eyebrow: '用药记录',
+      title: '记一次服药',
+      message: '记下吃了什么药、什么时候吃的，避免忘记或重复服用。',
+      confirmText: '记下来',
+      fields: [
+        FieldSpec('name', '药名',
+            required: true, placeholder: '例如：布洛芬'),
+        FieldSpec('dosage', '剂量（可不填）', placeholder: '例如：1 片 / 200mg'),
+        FieldSpec('takenAt', '服用时间',
+            type: FieldType.datetime, value: DateTime.now(), required: true),
+        FieldSpec('note', '备注（可不填）', placeholder: '例如：饭后服用'),
+      ]);
+  if (values == null) return;
+  final when = (values['takenAt'] as DateTime?) ?? DateTime.now();
+  await _guard(context, () async {
+    await s.api.request('/spaces/${s.spaceId}/medications',
+        method: 'POST',
+        body: {
+          'name': values['name'],
+          'dosage': (values['dosage'] as String).isEmpty
+              ? null
+              : values['dosage'],
+          'takenAt': when.toUtc().toIso8601String(),
+          'note': (values['note'] as String).isEmpty ? null : values['note'],
+        });
+    await s.reloadMedications();
+    if (context.mounted) showToast(context, '已记录用药：${values['name']}');
+  });
+}
+
+Future<void> editMedication(
+    BuildContext context, SessionController s, Map m) async {
+  final values =
+      await showForm(context, eyebrow: '用药记录', title: '编辑用药记录', fields: [
+    FieldSpec('name', '药名', value: m['name'], required: true),
+    FieldSpec('dosage', '剂量', value: m['dosage'] ?? ''),
+    FieldSpec('takenAt', '服用时间',
+        type: FieldType.datetime,
+        value: tryParse(m['takenAt']),
+        required: true),
+    FieldSpec('note', '备注', value: m['note'] ?? ''),
+  ]);
+  if (values == null) return;
+  final when = (values['takenAt'] as DateTime?) ?? DateTime.now();
+  await _guard(context, () async {
+    await s.api.request('/spaces/${s.spaceId}/medications/${m['id']}',
+        method: 'PATCH',
+        body: {
+          'name': values['name'],
+          'dosage': values['dosage'],
+          'takenAt': when.toUtc().toIso8601String(),
+          'note': values['note'],
+        });
+    await s.reloadMedications();
+    if (context.mounted) showToast(context, '用药记录已更新');
+  });
+}
+
+Future<void> deleteMedication(
+    BuildContext context, SessionController s, Map m) async {
+  final ok = await showConfirm(context,
+      eyebrow: '删除用药记录',
+      title: '删除「${m['name']}」这条记录？',
+      message: formatMonthDayTime(m['takenAt']),
+      confirmText: '删除',
+      danger: true);
+  if (!ok) return;
+  await _guard(context, () async {
+    await s.api.request('/spaces/${s.spaceId}/medications/${m['id']}',
+        method: 'DELETE');
+    await s.reloadMedications();
+    if (context.mounted) showToast(context, '用药记录已删除');
+  });
+}
+
 // ——————————————————— 体温 / 体重 ———————————————————
 Future<void> addTemperature(BuildContext context, SessionController s) async {
   final values = await showForm(context,

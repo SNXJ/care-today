@@ -10,7 +10,7 @@ $sage: #71836a;
 page { min-height: 100%; background: $paper; color: $ink; font-family: "PingFang SC", "Noto Sans CJK SC", sans-serif; }
 view, text, button, input, textarea { box-sizing: border-box; }
 button::after { border: 0; }
-.page { min-height: 100vh; padding: calc(var(--status-bar-height) + 26rpx) 28rpx 160rpx; }
+.page { min-height: 100vh; padding: 0 28rpx 160rpx; }
 .hero { display: flex; align-items: flex-start; justify-content: space-between; gap: 20rpx; padding: 20rpx 4rpx 30rpx; }
 .eyebrow { color: $rose; font-size: 24rpx; font-weight: 700; letter-spacing: 2rpx; }
 .title { display: block; margin-top: 8rpx; font-family: "Songti SC", serif; font-size: 48rpx; font-weight: 700; line-height: 1.15; }
@@ -27,6 +27,7 @@ button::after { border: 0; }
 .row-meta { display: block; margin-top: 8rpx; color: $muted; font-size: 24rpx; line-height: 1.55; }
 .empty { padding: 44rpx 12rpx; color: $muted; font-size: 26rpx; line-height: 1.7; text-align: center; }
 .primary { min-height: 88rpx; border-radius: 20rpx; background: $rose; color: #fff; font-size: 28rpx; font-weight: 700; line-height: 88rpx; }
+.primary.disabled, .primary[disabled] { background: #d8c8bd; color: #fffaf5; }
 .secondary { min-height: 76rpx; border: 1px solid $line; border-radius: 18rpx; background: #fffaf5; color: $ink; font-size: 26rpx; line-height: 76rpx; }
 .fab { position: fixed; right: 32rpx; bottom: calc(130rpx + env(safe-area-inset-bottom)); z-index: 20; width: 100rpx; height: 100rpx; border-radius: 34rpx; background: $rose; color: #fff; font-size: 54rpx; line-height: 96rpx; box-shadow: 0 18rpx 38rpx rgba(184,95,85,.32); }
 .field { margin-bottom: 24rpx; }
@@ -35,6 +36,71 @@ button::after { border: 0; }
 .textarea { min-height: 180rpx; line-height: 1.6; }
 .form-actions { display: grid; gap: 16rpx; margin-top: 30rpx; }
 .boundary { color: $muted; font-size: 23rpx; line-height: 1.8; }
+.link { color: $rose; font-weight: 700; }
+.agreement { align-items: flex-start; gap: 4rpx; margin: 10rpx 0 24rpx; color: $muted; font-size: 24rpx; line-height: 1.7; }
+.agreement-line { margin: -4rpx 0 24rpx; color: $muted; font-size: 24rpx; line-height: 1.7; }
+.action { display:flex; align-items:center; justify-content:space-between; width:100%; padding:24rpx 4rpx; border-top:1px solid #f0e5d8; background:transparent; text-align:left; line-height:1.4; }
+.action:first-of-type { border-top:0; }
+.arrow { color:$rose; font-size:44rpx; }
+.legal-body { padding-top: 24rpx; }
+.legal-title { display:block; margin-bottom: 18rpx; font-size: 42rpx; font-weight: 700; line-height: 1.25; }
+.legal-meta { display:block; margin-bottom: 24rpx; color: $muted; font-size: 24rpx; }
+.legal-section { margin-bottom: 26rpx; color: $muted; font-size: 26rpx; line-height: 1.8; }
+.legal-section-title { display:block; margin-bottom: 8rpx; color: $ink; font-size: 29rpx; font-weight: 700; }
 .metric-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18rpx; }
 .metric { padding: 24rpx; border: 1px solid $line; border-radius: 20rpx; background: #fff; }
 .metric-value { display: block; margin-top: 10rpx; color: $rose; font-family: "Songti SC", serif; font-size: 44rpx; font-weight: 700; }
+
+/* —— 对齐 Flutter App：身体页汇总磁贴 —— */
+$amber: #c8893f;
+.tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16rpx; margin-bottom: 24rpx; }
+.tile { padding: 22rpx 18rpx; border: 1px solid $line; border-radius: 24rpx; background: $panel; }
+.tile-label { display: block; color: $muted; font-size: 22rpx; }
+.tile-value { display: block; margin-top: 10rpx; font-family: "Songti SC", serif; font-size: 46rpx; font-weight: 700; line-height: 1; }
+.tile-value .unit { font-family: "PingFang SC", sans-serif; font-size: 22rpx; margin-left: 4rpx; }
+.tile-sub { display: block; margin-top: 10rpx; color: $muted; font-size: 21rpx; line-height: 1.4; }
+.tile.rose .tile-value { color: $rose; }
+.tile.gold .tile-value { color: $amber; }
+.tile.amber .tile-value { color: $amber; }
+
+/* 分组小标题（今天 / 最近 7 天） */
+.subhead { display: block; margin: 20rpx 0 6rpx; font-size: 26rpx; font-weight: 700; color: $ink; }
+.subhead:first-child { margin-top: 0; }
+
+/* 可点记录行（症状 / 用药） */
+.log-row { display: flex; align-items: flex-start; gap: 16rpx; width: 100%; padding: 18rpx 0; border-top: 1px solid #f0e5d8; background: transparent; text-align: left; }
+.log-row:first-of-type { border-top: 0; }
+.log-time { flex: 0 0 auto; min-width: 130rpx; color: $muted; font-size: 24rpx; font-weight: 700; line-height: 1.5; }
+.log-main { flex: 1; min-width: 0; }
+.log-title { display: block; font-size: 28rpx; font-weight: 700; line-height: 1.45; }
+.log-meta { display: block; margin-top: 6rpx; color: $muted; font-size: 24rpx; line-height: 1.5; }
+.log-row .arrow { align-self: center; }
+
+/* 今日体温胶囊 */
+.temp-readings { display: flex; flex-wrap: wrap; gap: 16rpx; }
+.temp-reading { display: flex; flex-direction: column; align-items: center; gap: 4rpx; min-width: 150rpx; padding: 18rpx 20rpx; border: 1px solid $line; border-radius: 20rpx; background: #fff7ee; }
+.temp-num { font-size: 34rpx; font-weight: 700; }
+.temp-num .unit { font-size: 22rpx; }
+.temp-note, .temp-clock { color: $muted; font-size: 22rpx; }
+
+/* 症状筛选 / 趋势指标 chips */
+.chips { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 12rpx; }
+.chip { padding: 10rpx 20rpx; border: 1px solid $line; border-radius: 999rpx; background: #fff; color: $muted; font-size: 24rpx; }
+.chip.active { border-color: $rose; background: $rose-soft; color: $rose; }
+.day-toggle { display: flex; gap: 10rpx; }
+.day-toggle .chip { font-size: 22rpx; padding: 6rpx 16rpx; }
+
+/* 评分记录 */
+.score-row { display: flex; gap: 16rpx; padding: 16rpx 0; border-top: 1px solid #f0e5d8; }
+.score-row:first-of-type { border-top: 0; }
+.score-date { flex: 0 0 auto; min-width: 120rpx; }
+.sd-day { display: block; font-size: 24rpx; font-weight: 700; }
+.sd-time { display: block; margin-top: 4rpx; color: $muted; font-size: 20rpx; }
+.score-pills { flex: 1; display: flex; flex-wrap: wrap; gap: 10rpx; }
+.score-pill { padding: 6rpx 16rpx; border-radius: 999rpx; background: #f3ece2; color: $ink; font-size: 23rpx; }
+
+/* 今天页：联系医生要点 */
+.bullet-list { margin: 0; }
+.bullet { display: flex; gap: 8rpx; padding: 8rpx 0; color: $ink; font-size: 26rpx; line-height: 1.6; }
+.bullet::before { content: '·'; font-weight: 700; }
+.inline-btn { margin-top: 18rpx; }

@@ -95,6 +95,15 @@ public final class CareModels {
       String note,
       Instant createdAt) {}
 
+  public record MedicationLog(
+      UUID id,
+      UUID spaceId,
+      String name,
+      String dosage,
+      Instant takenAt,
+      String note,
+      Instant createdAt) {}
+
   public record DoctorQuestion(
       UUID id,
       UUID spaceId,

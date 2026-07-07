@@ -7,6 +7,7 @@ import com.caretoday.api.care.CareModels.CareSpace;
 import com.caretoday.api.care.CareModels.DoctorQuestion;
 import com.caretoday.api.care.CareModels.HelpTask;
 import com.caretoday.api.care.CareModels.HelpTaskStatus;
+import com.caretoday.api.care.CareModels.MedicationLog;
 import com.caretoday.api.care.CareModels.MemberRole;
 import com.caretoday.api.care.CareModels.MemberStatus;
 import com.caretoday.api.care.CareModels.CareNotice;
@@ -19,12 +20,14 @@ import com.caretoday.api.care.CareModels.SymptomEvent;
 import com.caretoday.api.care.CareRequests.CreateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.CreateEventRequest;
 import com.caretoday.api.care.CareRequests.CreateHelpTaskRequest;
+import com.caretoday.api.care.CareRequests.CreateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.CreateNoteRequest;
 import com.caretoday.api.care.CareRequests.CreateNoticeRequest;
 import com.caretoday.api.care.CareRequests.CreateSymptomEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateBodyRecordRequest;
 import com.caretoday.api.care.CareRequests.UpdateEventRequest;
 import com.caretoday.api.care.CareRequests.UpdateHelpTaskRequest;
+import com.caretoday.api.care.CareRequests.UpdateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.UpdateMessageRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoteRequest;
 import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
@@ -504,6 +507,72 @@ public class CareRepository {
 
   public boolean deleteSymptomEvent(UUID spaceId, UUID symptomId) {
     return softDelete("symptom_events", spaceId, symptomId);
+  }
+
+  public List<MedicationLog> listMedicationLogs(UUID spaceId) {
+    return jdbcTemplate.query(
+        """
+        SELECT id, space_id, name, dosage, taken_at, note, created_at
+        FROM medication_logs
+        WHERE space_id = ? AND deleted_at IS NULL
+        ORDER BY taken_at DESC
+        """,
+        (rs, rowNum) -> mapMedicationLog(rs),
+        id(spaceId));
+  }
+
+  public Optional<MedicationLog> findMedicationLog(UUID logId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, name, dosage, taken_at, note, created_at
+            FROM medication_logs
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> mapMedicationLog(rs),
+            id(logId))
+        .stream()
+        .findFirst();
+  }
+
+  public MedicationLog createMedicationLog(UUID spaceId, UUID userId, CreateMedicationLogRequest request) {
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
+        """
+        INSERT INTO medication_logs (id, space_id, name, dosage, taken_at, note, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        id(id),
+        id(spaceId),
+        request.name(),
+        blankToNull(request.dosage()),
+        Timestamp.from(request.takenAt()),
+        request.note(),
+        id(userId));
+    return findMedicationLog(id).orElseThrow();
+  }
+
+  public Optional<MedicationLog> updateMedicationLog(UUID spaceId, UUID logId, UpdateMedicationLogRequest request) {
+    int updated = jdbcTemplate.update(
+        """
+        UPDATE medication_logs
+        SET name = COALESCE(?, name),
+            dosage = COALESCE(?, dosage),
+            taken_at = COALESCE(?, taken_at),
+            note = COALESCE(?, note),
+            updated_at = CURRENT_TIMESTAMP(3)
+        WHERE id = ? AND space_id = ? AND deleted_at IS NULL
+        """,
+        blankToNull(request.name()),
+        blankToNull(request.dosage()),
+        request.takenAt() == null ? null : Timestamp.from(request.takenAt()),
+        request.note(),
+        id(logId),
+        id(spaceId));
+    return updated == 0 ? Optional.empty() : findMedicationLog(logId);
+  }
+
+  public boolean deleteMedicationLog(UUID spaceId, UUID logId) {
+    return softDelete("medication_logs", spaceId, logId);
   }
 
   public List<DoctorQuestion> listDoctorQuestions(UUID spaceId) {
@@ -994,6 +1063,17 @@ public class CareRepository {
         uuid(rs, "space_id"),
         rs.getString("tag"),
         toInstant(rs, "happened_at"),
+        rs.getString("note"),
+        toInstant(rs, "created_at"));
+  }
+
+  private MedicationLog mapMedicationLog(ResultSet rs) throws SQLException {
+    return new MedicationLog(
+        uuid(rs, "id"),
+        uuid(rs, "space_id"),
+        rs.getString("name"),
+        rs.getString("dosage"),
+        toInstant(rs, "taken_at"),
         rs.getString("note"),
         toInstant(rs, "created_at"));
   }

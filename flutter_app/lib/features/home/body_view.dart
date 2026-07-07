@@ -49,6 +49,7 @@ class _BodyViewState extends State<BodyView> {
         const SizedBox(height: 4),
         _trendCard(s),
         if (_todayTemps(s, today).isNotEmpty) _todayTempCard(context, s, today),
+        _medicationCard(context, s, today),
         _symptomCard(context, s, today),
         _scoreRecordsCard(s),
         SectionCard(
@@ -179,6 +180,79 @@ class _BodyViewState extends State<BodyView> {
                 ))
             .toList(),
       ),
+    );
+  }
+
+  Widget _medicationCard(
+      BuildContext context, SessionController s, String today) {
+    final cutoff = DateTime.now().subtract(const Duration(days: 7));
+    final todayList = s.medications
+        .where((m) => dateKeyOf(m['takenAt']) == today)
+        .toList()
+      ..sort((a, b) =>
+          b['takenAt'].toString().compareTo(a['takenAt'].toString()));
+    final recentList = s.medications.where((m) {
+      final d = tryParse(m['takenAt']);
+      return dateKeyOf(m['takenAt']) != today &&
+          d != null &&
+          !d.isBefore(cutoff);
+    }).toList()
+      ..sort((a, b) =>
+          b['takenAt'].toString().compareTo(a['takenAt'].toString()));
+
+    return SectionCard(
+      title: '用药记录',
+      tag: todayList.isEmpty ? '今天还没记' : '今天 ${todayList.length} 次',
+      icon: Icons.medication_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (todayList.isEmpty && recentList.isEmpty)
+            emptyNote('还没有用药记录。点右下角「+」记一次服药，别忘了吃药。'),
+          if (todayList.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 4, bottom: 4),
+              child: Text('今天',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+            ...todayList.map((m) => _medicationRow(
+                context, s, m, formatTimelineTime(m['takenAt']))),
+          ],
+          if (recentList.isNotEmpty) ...[
+            const Padding(
+              padding: EdgeInsets.only(top: 8, bottom: 4),
+              child: Text('最近 7 天',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+            ...recentList.map((m) => _medicationRow(
+                context, s, m, formatMonthDayTime(m['takenAt']))),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _medicationRow(
+      BuildContext context, SessionController s, Map m, String time) {
+    final dosage = (m['dosage'] ?? '').toString();
+    final note = (m['note'] ?? '').toString();
+    final subParts = [
+      if (dosage.isNotEmpty) dosage,
+      if (note.isNotEmpty) note,
+    ];
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      dense: true,
+      leading: SizedBox(
+          width: 84,
+          child: Text(time,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w600, fontSize: 12, color: muted))),
+      title: Text(m['name']?.toString() ?? '',
+          style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: subParts.isEmpty ? null : Text(subParts.join(' · ')),
+      trailing: const Icon(Icons.chevron_right, color: muted),
+      onTap: () => manageMedication(context, s, m),
     );
   }
 

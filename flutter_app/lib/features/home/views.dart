@@ -97,6 +97,7 @@ class TodayView extends StatelessWidget {
             ],
           ),
         ),
+        _MedicationCard(s, today),
         SectionCard(
           title: '及时联系医生',
           icon: Icons.warning_amber_outlined,
@@ -110,6 +111,65 @@ class TodayView extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// 今天页的用药提醒：显示今天已记录的服药，并提供快速「记一次」入口。
+class _MedicationCard extends StatelessWidget {
+  const _MedicationCard(this.s, this.today);
+  final SessionController s;
+  final String today;
+  @override
+  Widget build(BuildContext context) {
+    final todayMeds = s.medications
+        .where((m) => dateKeyOf(m['takenAt']) == today)
+        .toList()
+      ..sort((a, b) =>
+          a['takenAt'].toString().compareTo(b['takenAt'].toString()));
+    return SectionCard(
+      title: '今天的用药',
+      tag: todayMeds.isEmpty ? '还没记录' : '已记 ${todayMeds.length} 次',
+      icon: Icons.medication_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (todayMeds.isEmpty)
+            emptyNote('今天还没有用药记录。吃过药就点下方按钮记一笔，别漏了也别重复吃。')
+          else
+            ...todayMeds.map((m) {
+              final dosage = (m['dosage'] ?? '').toString();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                        width: 52,
+                        child: Text(formatTimelineTime(m['takenAt']),
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w700, fontSize: 13))),
+                    Expanded(
+                      child: Text(
+                          dosage.isEmpty
+                              ? (m['name']?.toString() ?? '')
+                              : '${m['name']}（$dosage）',
+                          style: const TextStyle(fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+                onPressed: () => addMedication(context, s),
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('记一次服药')),
+          ),
+        ],
+      ),
     );
   }
 }
