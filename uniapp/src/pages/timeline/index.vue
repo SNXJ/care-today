@@ -3,7 +3,8 @@ import { computed } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import PageHero from '../../components/PageHero.vue';
 import ComposeFab from '../../components/ComposeFab.vue';
-import { useSession } from '../../state/session';
+import { api } from '../../api/client';
+import { refreshCurrentSpace, useSession } from '../../state/session';
 import { dateKey, formatDay, formatTime, showError } from '../../utils/format';
 
 const session = useSession();
@@ -28,19 +29,19 @@ function rangeLabel(n: any) {
 const items = computed(() => {
   const list: any[] = [];
   for (const e of session.data.events) {
-    list.push({ id: `e-${e.id}`, type: '日程', title: e.title, meta: `${formatTime(e.scheduledAt)} · ${e.location || '待补充地点'}`, detail: e.note || (e.needsCompanion ? '需要有人陪同' : '站内提醒'), at: e.scheduledAt });
+    list.push({ id: `e-${e.id}`, kind: 'event', rawId: e.id, type: '日程', title: e.title, meta: `${formatTime(e.scheduledAt)} · ${e.location || '待补充地点'}`, detail: e.note || (e.needsCompanion ? '需要有人陪同' : '站内提醒'), at: e.scheduledAt });
   }
   for (const q of session.data.questions) {
-    list.push({ id: `q-${q.id}`, type: '问医生', title: q.question, meta: q.asked ? '已问过医生' : (q.important ? '重点问题' : '待复诊时确认'), detail: q.doctorAnswer || '还没有记录医生回复', at: q.createdAt });
+    list.push({ id: `q-${q.id}`, kind: 'question', rawId: q.id, type: '问医生', title: q.question, meta: q.asked ? '已问过医生' : (q.important ? '重点问题' : '待复诊时确认'), detail: q.doctorAnswer || '还没有记录医生回复', at: q.createdAt });
   }
   for (const m of session.data.messages) {
-    list.push({ id: `m-${m.id}`, type: '分享', title: m.text, meta: m.author || '家人', detail: '一条分享动态', at: m.createdAt });
+    list.push({ id: `m-${m.id}`, kind: 'message', rawId: m.id, type: '分享', title: m.text, meta: m.author || '家人', detail: '一条分享动态', at: m.createdAt });
   }
   for (const n of session.data.notes) {
-    list.push({ id: `f-${n.id}`, type: '资料', title: n.title, meta: n.type || '文本资料', detail: n.content || '资料文本已保存', at: n.createdAt });
+    list.push({ id: `f-${n.id}`, kind: 'note', rawId: n.id, type: '资料', title: n.title, meta: n.type || '文本资料', detail: n.content || '资料文本已保存', at: n.createdAt });
   }
   for (const n of session.data.notices) {
-    list.push({ id: `n-${n.id}`, type: '注意', title: n.content, meta: `${n.important ? '重要 · ' : ''}${rangeLabel(n)}`, detail: n.detail || '添加了一条注意事项', at: n.createdAt });
+    list.push({ id: `n-${n.id}`, kind: 'notice', rawId: n.id, type: '注意', title: n.content, meta: `${n.important ? '重要 · ' : ''}${rangeLabel(n)}`, detail: n.detail || '添加了一条注意事项', at: n.createdAt });
   }
   return list.filter((x) => x.at)
     .map((x) => ({ ...x, accent: accents[x.type], dateLabel: formatDay(x.at), timeLabel: formatTime(x.at) }))
@@ -55,8 +56,37 @@ const todayLabel = computed(() => {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 });
 
+const deleteApis: Record<string, (spaceId: string, id: string) => Promise<any>> = {
+  event: api.deleteEvent, question: api.deleteQuestion, message: api.deleteMessage, note: api.deleteNote, notice: api.deleteNotice,
+};
+
+function openActions(item: any) {
+  uni.showActionSheet({
+    itemList: ['查看详情', '编辑', '删除'],
+    success: ({ tapIndex }) => {
+      if (tapIndex === 0) showDetail(item);
+      else if (tapIndex === 1) uni.navigateTo({ url: `/pages/compose/index?edit=${item.kind}&id=${item.rawId}` });
+      else if (tapIndex === 2) confirmDelete(item);
+    },
+  });
+}
+
 function showDetail(item: any) {
   uni.showModal({ title: `${item.type} · ${item.dateLabel}`, content: `${item.title}\n\n${item.meta}${item.detail ? '\n' + item.detail : ''}`, showCancel: false, confirmText: '好的' });
+}
+
+function confirmDelete(item: any) {
+  uni.showModal({
+    title: '删除这条记录？', content: item.title, confirmText: '删除', confirmColor: '#b85f55',
+    success: async (r) => {
+      if (!r.confirm || !session.data.space?.id) return;
+      try {
+        await deleteApis[item.kind](session.data.space.id, item.rawId);
+        await refreshCurrentSpace();
+        uni.showToast({ title: '已删除' });
+      } catch (error) { showError(error); }
+    },
+  });
 }
 </script>
 
@@ -67,7 +97,7 @@ function showDetail(item: any) {
     <!-- 接下来 -->
     <template v-if="futureItems.length">
       <view class="tl-sechead"><text class="t">接下来</text><text class="s">{{ futureItems.length }} 项即将发生</text></view>
-      <view v-for="(item, i) in futureItems" :key="item.id" class="tl-row" @click="showDetail(item)">
+      <view v-for="(item, i) in futureItems" :key="item.id" class="tl-row" @click="openActions(item)">
         <view class="tl-rail">
           <view v-if="i !== 0" class="tl-seg top" />
           <view v-if="i !== futureItems.length - 1" class="tl-seg bottom" />
@@ -87,7 +117,7 @@ function showDetail(item: any) {
 
     <!-- 过往 -->
     <view v-if="!pastItems.length" class="empty">今天和之前还没有记录。</view>
-    <view v-for="(item, i) in pastItems" :key="item.id" class="tl-row" @click="showDetail(item)">
+    <view v-for="(item, i) in pastItems" :key="item.id" class="tl-row" @click="openActions(item)">
       <view class="tl-rail">
         <view v-if="i !== 0" class="tl-seg top" />
         <view v-if="i !== pastItems.length - 1" class="tl-seg bottom" />
