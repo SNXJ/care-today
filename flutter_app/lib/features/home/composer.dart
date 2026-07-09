@@ -28,13 +28,13 @@ const _actions = [
   _ComposerAction(
       'notice', '记注意事项', '有效期内置顶', Icons.warning_amber_outlined, amber),
   _ComposerAction('question', '问医生的问题', '复诊前确认', Icons.help_outline, _blue),
-  _ComposerAction('note', '存一条资料', '报告、用药、医嘱', Icons.folder_outlined, sage),
+  _ComposerAction('note', '存复诊资料', '报告拍照或文字存档', Icons.folder_outlined, sage),
 ];
 
 const _scope = {
   'moments': ['message'],
   'body': ['bodyRecord', 'temperature', 'weight', 'symptom', 'medication'],
-  'notices': ['notice'],
+  'folder': ['note'],
 };
 
 Future<void> openComposer(

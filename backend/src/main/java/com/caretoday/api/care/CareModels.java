@@ -2,6 +2,7 @@ package com.caretoday.api.care;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 
 public final class CareModels {
@@ -129,6 +130,7 @@ public final class CareModels {
       UUID spaceId,
       String text,
       String author,
+      List<String> photos,
       Instant createdAt) {}
 
   public record CareNote(
@@ -138,7 +140,14 @@ public final class CareModels {
       String type,
       String content,
       NoteVisibility visibility,
+      List<String> photos,
       Instant createdAt) {}
+
+  public record UploadedFile(
+      UUID id,
+      UUID spaceId,
+      String contentType,
+      byte[] data) {}
 
   public record CareNotice(
       UUID id,

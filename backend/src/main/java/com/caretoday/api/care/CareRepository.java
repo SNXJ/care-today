@@ -745,7 +745,7 @@ public class CareRepository {
   public List<SupportMessage> listMessages(UUID spaceId) {
     return jdbcTemplate.query(
         """
-        SELECT m.id, m.space_id, m.text, COALESCE(u.nickname, '成员') AS author, m.created_at
+        SELECT m.id, m.space_id, m.text, COALESCE(u.nickname, '成员') AS author, m.photos, m.created_at
         FROM messages m
         LEFT JOIN users u ON u.id = m.user_id
         WHERE m.space_id = ? AND m.deleted_at IS NULL
@@ -758,7 +758,7 @@ public class CareRepository {
   public Optional<SupportMessage> findMessage(UUID messageId) {
     return jdbcTemplate.query(
             """
-            SELECT m.id, m.space_id, m.text, COALESCE(u.nickname, '成员') AS author, m.created_at
+            SELECT m.id, m.space_id, m.text, COALESCE(u.nickname, '成员') AS author, m.photos, m.created_at
             FROM messages m
             LEFT JOIN users u ON u.id = m.user_id
             WHERE m.id = ? AND m.deleted_at IS NULL
@@ -769,17 +769,18 @@ public class CareRepository {
         .findFirst();
   }
 
-  public SupportMessage createMessage(UUID spaceId, UUID userId, String text) {
+  public SupportMessage createMessage(UUID spaceId, UUID userId, String text, List<String> photos) {
     UUID id = UUID.randomUUID();
     jdbcTemplate.update(
         """
-        INSERT INTO messages (id, space_id, user_id, text)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO messages (id, space_id, user_id, text, photos)
+        VALUES (?, ?, ?, ?, ?)
         """,
         id(id),
         id(spaceId),
         id(userId),
-        text);
+        text,
+        photosToJson(photos));
     return findMessage(id).orElseThrow();
   }
 
@@ -787,10 +788,12 @@ public class CareRepository {
     int updated = jdbcTemplate.update(
         """
         UPDATE messages
-        SET text = COALESCE(?, text)
+        SET text = COALESCE(?, text),
+            photos = COALESCE(?, photos)
         WHERE id = ? AND space_id = ? AND deleted_at IS NULL
         """,
         blankToNull(request.text()),
+        photosToJson(request.photos()),
         id(messageId),
         id(spaceId));
     return updated == 0 ? Optional.empty() : findMessage(messageId);
@@ -807,7 +810,7 @@ public class CareRepository {
   public List<CareNote> listNotes(UUID spaceId, boolean includePatientAdminOnly) {
     return jdbcTemplate.query(
         """
-        SELECT id, space_id, title, type, content, visibility, created_at
+        SELECT id, space_id, title, type, content, visibility, photos, created_at
         FROM notes
         WHERE space_id = ?
           AND deleted_at IS NULL
@@ -822,7 +825,7 @@ public class CareRepository {
   public Optional<CareNote> findNote(UUID noteId) {
     return jdbcTemplate.query(
             """
-            SELECT id, space_id, title, type, content, visibility, created_at
+            SELECT id, space_id, title, type, content, visibility, photos, created_at
             FROM notes
             WHERE id = ? AND deleted_at IS NULL
             """,
@@ -836,8 +839,8 @@ public class CareRepository {
     UUID id = UUID.randomUUID();
     jdbcTemplate.update(
         """
-        INSERT INTO notes (id, space_id, title, type, content, visibility, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO notes (id, space_id, title, type, content, visibility, created_by, photos)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """,
         id(id),
         id(spaceId),
@@ -845,7 +848,8 @@ public class CareRepository {
         request.type(),
         request.content(),
         request.visibility().name().toLowerCase(),
-        id(userId));
+        id(userId),
+        photosToJson(request.photos()));
     return findNote(id).orElseThrow();
   }
 
@@ -857,6 +861,7 @@ public class CareRepository {
             type = COALESCE(?, type),
             content = COALESCE(?, content),
             visibility = COALESCE(?, visibility),
+            photos = COALESCE(?, photos),
             updated_at = CURRENT_TIMESTAMP(3)
         WHERE id = ? AND space_id = ? AND deleted_at IS NULL
         """,
@@ -864,6 +869,7 @@ public class CareRepository {
         blankToNull(request.type()),
         request.content(),
         request.visibility() == null ? null : request.visibility().name().toLowerCase(),
+        photosToJson(request.photos()),
         id(noteId),
         id(spaceId));
     return updated == 0 ? Optional.empty() : findNote(noteId);
@@ -1084,6 +1090,7 @@ public class CareRepository {
         uuid(rs, "space_id"),
         rs.getString("text"),
         rs.getString("author"),
+        photosFromJson(rs.getString("photos")),
         toInstant(rs, "created_at"));
   }
 
@@ -1095,7 +1102,61 @@ public class CareRepository {
         rs.getString("type"),
         rs.getString("content"),
         NoteVisibility.valueOf(rs.getString("visibility").toUpperCase()),
+        photosFromJson(rs.getString("photos")),
         toInstant(rs, "created_at"));
+  }
+
+  // —— 图片附件：photos 列以 JSON 数组存 uploaded_files.id（均为 UUID，无需转义）——
+  static String photosToJson(List<String> photos) {
+    if (photos == null) {
+      return null;
+    }
+    return photos.stream()
+        .filter(p -> p != null && !p.isBlank())
+        .map(p -> '"' + UUID.fromString(p.trim()).toString() + '"')
+        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+  }
+
+  static List<String> photosFromJson(String json) {
+    if (json == null || json.isBlank()) {
+      return List.of();
+    }
+    return java.util.Arrays.stream(json.replaceAll("[\\[\\]\"\\s]", "").split(","))
+        .filter(p -> !p.isBlank())
+        .toList();
+  }
+
+  public UUID createFile(UUID spaceId, UUID uploaderId, String contentType, byte[] data) {
+    UUID id = UUID.randomUUID();
+    jdbcTemplate.update(
+        """
+        INSERT INTO uploaded_files (id, space_id, uploader_id, content_type, size_bytes, data)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+        id(id),
+        id(spaceId),
+        id(uploaderId),
+        contentType,
+        data.length,
+        data);
+    return id;
+  }
+
+  public Optional<CareModels.UploadedFile> findFile(UUID fileId) {
+    return jdbcTemplate.query(
+            """
+            SELECT id, space_id, content_type, data
+            FROM uploaded_files
+            WHERE id = ? AND deleted_at IS NULL
+            """,
+            (rs, rowNum) -> new CareModels.UploadedFile(
+                uuid(rs, "id"),
+                uuid(rs, "space_id"),
+                rs.getString("content_type"),
+                rs.getBytes("data")),
+            id(fileId))
+        .stream()
+        .findFirst();
   }
 
   private CareNotice mapNotice(ResultSet rs) throws SQLException {

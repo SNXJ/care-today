@@ -6,6 +6,16 @@ allprojects {
         google()
         mavenCentral()
     }
+    // 插件子工程（如 image_picker_android）自带 buildscript 块，同样注入镜像
+    buildscript {
+        repositories {
+            maven { url 'https://maven.aliyun.com/repository/google' }
+            maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+            maven { url 'https://maven.aliyun.com/repository/central' }
+            google()
+            mavenCentral()
+        }
+    }
 }
 
 rootProject.buildDir = "../build"

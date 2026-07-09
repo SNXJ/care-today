@@ -7,3 +7,6 @@ const String careOrigin = String.fromEnvironment(
 
 /// 后端 API 基址。
 const String careApiBase = '$careOrigin/api';
+
+/// 图片附件的完整访问地址（fileId 为不可猜测的 UUID）。
+String photoUrl(String id) => '$careApiBase/files/$id';

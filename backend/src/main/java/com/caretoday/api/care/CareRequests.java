@@ -110,21 +110,23 @@ public final class CareRequests {
       String description,
       HelpTaskStatus status) {}
 
-  public record CreateMessageRequest(@NotBlank String text) {}
+  public record CreateMessageRequest(@NotBlank String text, java.util.List<String> photos) {}
 
-  public record UpdateMessageRequest(String text) {}
+  public record UpdateMessageRequest(String text, java.util.List<String> photos) {}
 
   public record CreateNoteRequest(
       @NotBlank String title,
       @NotBlank String type,
       String content,
-      @NotNull NoteVisibility visibility) {}
+      @NotNull NoteVisibility visibility,
+      java.util.List<String> photos) {}
 
   public record UpdateNoteRequest(
       String title,
       String type,
       String content,
-      NoteVisibility visibility) {}
+      NoteVisibility visibility,
+      java.util.List<String> photos) {}
 
   public record CreateNoticeRequest(
       @NotBlank String content,

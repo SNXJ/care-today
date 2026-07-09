@@ -7,6 +7,7 @@ import 'actions.dart';
 import 'composer.dart';
 import 'manage.dart';
 import 'panels.dart';
+import 'photos.dart';
 
 const _disclaimer = '仅用于陪伴协作和就诊整理；诊断、用药和治疗以医生意见为准。';
 
@@ -91,8 +92,11 @@ class TodayView extends StatelessWidget {
                     onPressed: () => openQuestionsPanel(context),
                     child: const Text('问题清单')),
                 OutlinedButton(
-                    onPressed: () => openFolderPanel(context),
-                    child: const Text('复诊资料')),
+                    onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const NoticesScreen())),
+                    child: const Text('注意事项')),
               ]),
             ],
           ),
@@ -301,6 +305,10 @@ class MomentsView extends StatelessWidget {
                         children: [
                           Text(m['text']?.toString() ?? '',
                               style: const TextStyle(height: 1.5)),
+                          if (photoIdsOf(m).isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            PhotoGrid(photoIdsOf(m)),
+                          ],
                           const SizedBox(height: 6),
                           Text(
                               '${m['author'] ?? '家人'} · ${formatFullDateTime(m['createdAt'])}',
@@ -322,7 +330,117 @@ class MomentsView extends StatelessWidget {
   }
 }
 
-// ————————————————————————— 注意 —————————————————————————
+// ————————————————————————— 复诊资料（tab）—————————————————————————
+class FolderView extends StatelessWidget {
+  const FolderView({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = context.watch<SessionController>();
+    final notes = s.notes;
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SectionCard(
+          title: '复诊资料',
+          tag: notes.isEmpty ? '拍照或文字存档' : '共 ${notes.length} 条',
+          icon: Icons.folder_outlined,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('检查报告、化验单、医嘱都可以拍照存进来，复诊时直接翻给医生看。',
+                  style: TextStyle(color: muted, fontSize: 13, height: 1.5)),
+              const SizedBox(height: 10),
+              if (notes.isEmpty)
+                emptyNote('还没有资料。点右下角「+」拍照或记录第一条。')
+              else
+                ...notes.map((n) => _NoteCard(n, s)),
+            ],
+          ),
+        ),
+        SectionCard(
+          title: '医疗边界',
+          icon: Icons.privacy_tip_outlined,
+          child: const Text(_disclaimer, style: TextStyle(height: 1.6)),
+        ),
+      ],
+    );
+  }
+}
+
+class _NoteCard extends StatelessWidget {
+  const _NoteCard(this.n, this.s);
+  final Map n;
+  final SessionController s;
+  @override
+  Widget build(BuildContext context) {
+    final photos = photoIdsOf(n);
+    final content = (n['content'] ?? '').toString();
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+          color: const Color(0xfffff7ee),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xffeadbca))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.folder_outlined, size: 18, color: sage),
+            const SizedBox(width: 8),
+            Expanded(
+                child: Text(n['title']?.toString() ?? '',
+                    style: const TextStyle(fontWeight: FontWeight.w700))),
+            IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 19,
+                color: muted,
+                onPressed: () => editNote(context, s, n),
+                icon: const Icon(Icons.edit_outlined)),
+            IconButton(
+                visualDensity: VisualDensity.compact,
+                iconSize: 19,
+                color: rose,
+                onPressed: () => deleteNote(context, s, n),
+                icon: const Icon(Icons.delete_outline)),
+          ]),
+          Text(
+              '${n['type'] ?? '文本资料'} · ${formatTimelineDate(n['createdAt'])}',
+              style: const TextStyle(color: muted, fontSize: 12)),
+          if (content.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child:
+                  Text(content, style: const TextStyle(height: 1.5)),
+            ),
+          if (photos.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            PhotoGrid(photos),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ————————————————————————— 注意（从今天页进入）—————————————————————————
+class NoticesScreen extends StatelessWidget {
+  const NoticesScreen({super.key});
+  @override
+  Widget build(BuildContext context) {
+    final s = context.read<SessionController>();
+    return Scaffold(
+      appBar: AppBar(title: const Text('注意事项')),
+      body: const NoticesView(),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => addNotice(context, s),
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
 class NoticesView extends StatelessWidget {
   const NoticesView({super.key});
   @override

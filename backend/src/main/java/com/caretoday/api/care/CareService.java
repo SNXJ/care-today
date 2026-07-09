@@ -284,9 +284,29 @@ public class CareService {
   public SupportMessage createMessage(UUID currentUserId, UUID spaceId, CreateMessageRequest request) {
     // 陪伴协作：所有活跃成员都可以在「分享」里发动态（编辑/删除仍限管理员）。
     ensureActiveMember(spaceId, currentUserId);
-    SupportMessage message = careRepository.createMessage(spaceId, currentUserId, request.text());
+    SupportMessage message =
+        careRepository.createMessage(spaceId, currentUserId, request.text(), request.photos());
     careRepository.audit(spaceId, currentUserId, "message.create", "message", message.id());
     return message;
+  }
+
+  // —— 图片附件 ——
+  public UUID uploadFile(UUID currentUserId, UUID spaceId, String contentType, byte[] data) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (contentType == null || !contentType.toLowerCase().startsWith("image/")) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "只支持上传图片");
+    }
+    if (data.length == 0 || data.length > 8 * 1024 * 1024) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "图片大小需在 8MB 以内");
+    }
+    UUID fileId = careRepository.createFile(spaceId, currentUserId, contentType, data);
+    careRepository.audit(spaceId, currentUserId, "file.upload", "uploaded_file", fileId);
+    return fileId;
+  }
+
+  public CareModels.UploadedFile getFile(UUID fileId) {
+    return careRepository.findFile(fileId)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "File not found"));
   }
 
   public SupportMessage updateMessage(UUID currentUserId, UUID spaceId, UUID messageId, UpdateMessageRequest request) {

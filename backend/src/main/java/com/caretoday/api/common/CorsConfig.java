@@ -42,7 +42,7 @@ public class CorsConfig {
         registry.addInterceptor(authInterceptor)
             .addPathPatterns("/api/**")
             .excludePathPatterns("/api/health", "/api/auth/register", "/api/auth/login",
-                "/api/app/version", "/actuator/**");
+                "/api/app/version", "/api/files/**", "/actuator/**");
       }
     };
   }

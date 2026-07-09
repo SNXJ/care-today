@@ -19,7 +19,7 @@ void showError(BuildContext context, Object error) =>
     showToast(context, error.toString());
 
 /// 表单字段类型，对齐 Web 端 openFormDialog 的 field.type。
-enum FieldType { text, textarea, number, date, datetime, checkbox }
+enum FieldType { text, textarea, number, date, datetime, checkbox, photos }
 
 class FieldSpec {
   FieldSpec(this.name, this.label,
@@ -27,7 +27,9 @@ class FieldSpec {
       this.value,
       this.required = false,
       this.placeholder = '',
-      this.readonly = false});
+      this.readonly = false,
+      this.uploader,
+      this.thumbUrl});
   final String name;
   final String label;
   final FieldType type;
@@ -35,6 +37,12 @@ class FieldSpec {
   final bool required;
   final String placeholder;
   final bool readonly;
+
+  /// photos 类型：点「+」时调用，完成选图并上传，返回文件 id（取消返回 null）。
+  final Future<String?> Function()? uploader;
+
+  /// photos 类型：由文件 id 生成缩略图地址。
+  final String Function(String id)? thumbUrl;
 }
 
 /// 弹出确认框，返回 true=确认。
@@ -114,6 +122,8 @@ class _FormDialogState extends State<_FormDialog> {
   final _controllers = <String, TextEditingController>{};
   final _bools = <String, bool>{};
   final _dates = <String, DateTime?>{};
+  final _photos = <String, List<String>>{};
+  bool _uploading = false;
 
   @override
   void initState() {
@@ -125,6 +135,9 @@ class _FormDialogState extends State<_FormDialog> {
         case FieldType.date:
         case FieldType.datetime:
           _dates[f.name] = f.value is DateTime ? f.value as DateTime : null;
+        case FieldType.photos:
+          _photos[f.name] =
+              List<String>.from(f.value as List? ?? const <String>[]);
         default:
           _controllers[f.name] =
               TextEditingController(text: f.value?.toString() ?? '');
@@ -177,6 +190,8 @@ class _FormDialogState extends State<_FormDialog> {
         case FieldType.date:
         case FieldType.datetime:
           values[f.name] = _dates[f.name];
+        case FieldType.photos:
+          values[f.name] = _photos[f.name];
         default:
           values[f.name] = _controllers[f.name]!.text.trim();
       }
@@ -192,8 +207,83 @@ class _FormDialogState extends State<_FormDialog> {
     Navigator.pop(context, values);
   }
 
+  Future<void> _addPhoto(FieldSpec f) async {
+    if (f.uploader == null || _uploading) return;
+    setState(() => _uploading = true);
+    try {
+      final id = await f.uploader!();
+      if (id != null && mounted) {
+        setState(() => _photos[f.name] = [..._photos[f.name]!, id]);
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
   Widget _buildField(FieldSpec f) {
     switch (f.type) {
+      case FieldType.photos:
+        final ids = _photos[f.name]!;
+        const side = 64.0;
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: InputDecorator(
+            decoration: InputDecoration(
+                labelText: f.label, border: const OutlineInputBorder()),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (var i = 0; i < ids.length; i++)
+                  Stack(clipBehavior: Clip.none, children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: f.thumbUrl == null
+                          ? Container(
+                              width: side,
+                              height: side,
+                              color: const Color(0xfff3ece2))
+                          : Image.network(f.thumbUrl!(ids[i]),
+                              width: side, height: side, fit: BoxFit.cover),
+                    ),
+                    Positioned(
+                      top: -7,
+                      right: -7,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _photos[f.name] =
+                            [...ids]..removeAt(i)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                              color: rose, shape: BoxShape.circle),
+                          padding: const EdgeInsets.all(2),
+                          child: const Icon(Icons.close,
+                              size: 13, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ]),
+                InkWell(
+                  onTap: () => _addPhoto(f),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: side,
+                    height: side,
+                    decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xffeadbca)),
+                        color: const Color(0xfffefbf6)),
+                    child: _uploading
+                        ? const Padding(
+                            padding: EdgeInsets.all(20),
+                            child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.add_a_photo_outlined,
+                            color: muted, size: 22),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
       case FieldType.checkbox:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),

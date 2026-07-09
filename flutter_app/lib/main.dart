@@ -303,8 +303,8 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int index = 0;
-  static const _labels = ['今天', '时间线', '分享', '身体', '注意'];
-  static const _views = ['today', 'timeline', 'moments', 'body', 'notices'];
+  static const _labels = ['今天', '时间线', '分享', '身体', '资料'];
+  static const _views = ['today', 'timeline', 'moments', 'body', 'folder'];
 
   @override
   void initState() {
@@ -333,7 +333,7 @@ class _HomeShellState extends State<HomeShell> {
           TimelineView(),
           MomentsView(),
           BodyView(),
-          NoticesView(),
+          FolderView(),
         ][index],
       ),
       bottomNavigationBar: NavigationBar(
@@ -357,9 +357,9 @@ class _HomeShellState extends State<HomeShell> {
               selectedIcon: Icon(Icons.monitor_heart),
               label: '身体'),
           NavigationDestination(
-              icon: Icon(Icons.notifications_none),
-              selectedIcon: Icon(Icons.notifications),
-              label: '注意'),
+              icon: Icon(Icons.folder_outlined),
+              selectedIcon: Icon(Icons.folder),
+              label: '资料'),
         ],
       ),
       floatingActionButton: FloatingActionButton(

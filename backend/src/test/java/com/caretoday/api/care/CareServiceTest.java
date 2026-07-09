@@ -46,7 +46,7 @@ class CareServiceTest {
   @Test
   void nonAdminCannotCreatePatientAdminOnlyNote() {
     when(careRepository.isAdmin(SPACE_ID, USER_ID)).thenReturn(false);
-    CreateNoteRequest request = new CreateNoteRequest("报告", "检查", "内容", NoteVisibility.PATIENT_ADMIN);
+    CreateNoteRequest request = new CreateNoteRequest("报告", "检查", "内容", NoteVisibility.PATIENT_ADMIN, null);
 
     assertThatThrownBy(() -> careService.createNote(USER_ID, SPACE_ID, request))
         .isInstanceOf(ResponseStatusException.class)

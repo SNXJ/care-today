@@ -34,6 +34,8 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -273,6 +275,26 @@ public class CareController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteMedicationLog(HttpServletRequest httpRequest, @PathVariable UUID spaceId, @PathVariable UUID logId) {
     careService.deleteMedicationLog(currentUser(httpRequest).id(), spaceId, logId);
+  }
+
+  // —— 图片附件：上传（需登录）+ 读取（凭不可猜测的 UUID 链接）——
+  @PostMapping("/spaces/{spaceId}/files")
+  public Object uploadFile(
+      HttpServletRequest httpRequest,
+      @PathVariable UUID spaceId,
+      @RequestParam("file") MultipartFile file) throws java.io.IOException {
+    UUID fileId = careService.uploadFile(
+        currentUser(httpRequest).id(), spaceId, file.getContentType(), file.getBytes());
+    return java.util.Map.of("id", fileId.toString(), "url", "/api/files/" + fileId);
+  }
+
+  @GetMapping("/files/{fileId}")
+  public org.springframework.http.ResponseEntity<byte[]> getFile(@PathVariable UUID fileId) {
+    var file = careService.getFile(fileId);
+    return org.springframework.http.ResponseEntity.ok()
+        .header("Content-Type", file.contentType())
+        .header("Cache-Control", "public, max-age=31536000, immutable")
+        .body(file.data());
   }
 
   @GetMapping("/spaces/{spaceId}/notices")

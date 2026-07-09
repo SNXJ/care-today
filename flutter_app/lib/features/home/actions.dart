@@ -6,6 +6,7 @@ import '../../core/app_config.dart';
 import '../../core/format.dart';
 import '../../core/ui.dart';
 import '../session/session_controller.dart';
+import 'photos.dart';
 
 /// 统一的异常包裹：捕获错误并 toast。
 Future<void> _guard(
@@ -170,6 +171,14 @@ Future<void> toggleQuestionAsked(
 }
 
 // ——————————————————— 分享 / 动态 ———————————————————
+FieldSpec _photosField(BuildContext context, SessionController s,
+        {List<String> value = const []}) =>
+    FieldSpec('photos', '照片（可不选）',
+        type: FieldType.photos,
+        value: value,
+        uploader: () => pickAndUploadPhoto(context, s),
+        thumbUrl: photoUrl);
+
 Future<void> addMessage(BuildContext context, SessionController s) async {
   final values = await showForm(context,
       eyebrow: '说说此刻',
@@ -180,12 +189,14 @@ Future<void> addMessage(BuildContext context, SessionController s) async {
         FieldSpec('text', '内容',
             type: FieldType.textarea,
             required: true,
-            placeholder: '此刻的想法、状态或想说的话')
+            placeholder: '此刻的想法、状态或想说的话'),
+        _photosField(context, s),
       ]);
   if (values == null) return;
   await _guard(context, () async {
     await s.api.request('/spaces/${s.spaceId}/messages',
-        method: 'POST', body: {'text': values['text']});
+        method: 'POST',
+        body: {'text': values['text'], 'photos': values['photos']});
     await s.reloadMessages();
     if (context.mounted) showToast(context, '动态已发布');
   });
@@ -195,12 +206,14 @@ Future<void> editMessage(
     BuildContext context, SessionController s, Map m) async {
   final values = await showForm(context, eyebrow: '动态', title: '编辑动态', fields: [
     FieldSpec('text', '内容',
-        type: FieldType.textarea, value: m['text'], required: true)
+        type: FieldType.textarea, value: m['text'], required: true),
+    _photosField(context, s, value: photoIdsOf(m)),
   ]);
   if (values == null) return;
   await _guard(context, () async {
     await s.api.request('/spaces/${s.spaceId}/messages/${m['id']}',
-        method: 'PATCH', body: {'text': values['text']});
+        method: 'PATCH',
+        body: {'text': values['text'], 'photos': values['photos']});
     await s.reloadMessages();
     if (context.mounted) showToast(context, '动态已更新');
   });
@@ -226,21 +239,25 @@ Future<void> deleteMessage(
 // ——————————————————— 资料 ———————————————————
 Future<void> addNote(BuildContext context, SessionController s) async {
   final values = await showForm(context,
-      eyebrow: '资料',
+      eyebrow: '复诊资料',
       title: '存一条复诊资料',
+      message: '检查报告、化验单可以直接拍照存进来。',
       confirmText: '保存',
       fields: [
         FieldSpec('title', '资料名称',
             required: true, placeholder: '报告名称、用药记录或医嘱备注'),
         FieldSpec('content', '内容', type: FieldType.textarea),
+        _photosField(context, s),
       ]);
   if (values == null) return;
   await _guard(context, () async {
+    final photos = values['photos'] as List? ?? const [];
     await s.api.request('/spaces/${s.spaceId}/notes', method: 'POST', body: {
       'title': values['title'],
-      'type': '文本资料',
+      'type': photos.isEmpty ? '文本资料' : '图片资料',
       'content': values['content'],
       'visibility': 'PATIENT_ADMIN',
+      'photos': values['photos'],
     });
     await s.reloadNotes();
     if (context.mounted) showToast(context, '资料已保存');
@@ -249,16 +266,23 @@ Future<void> addNote(BuildContext context, SessionController s) async {
 
 Future<void> editNote(BuildContext context, SessionController s, Map n) async {
   final values =
-      await showForm(context, eyebrow: '资料夹', title: '编辑资料', fields: [
+      await showForm(context, eyebrow: '复诊资料', title: '编辑资料', fields: [
     FieldSpec('title', '资料标题', value: n['title'], required: true),
     FieldSpec('content', '资料内容',
         type: FieldType.textarea, value: n['content'] ?? ''),
+    _photosField(context, s, value: photoIdsOf(n)),
   ]);
   if (values == null) return;
   await _guard(context, () async {
+    final photos = values['photos'] as List? ?? const [];
     await s.api.request('/spaces/${s.spaceId}/notes/${n['id']}',
         method: 'PATCH',
-        body: {'title': values['title'], 'content': values['content']});
+        body: {
+          'title': values['title'],
+          'content': values['content'],
+          'type': photos.isEmpty ? '文本资料' : '图片资料',
+          'photos': values['photos'],
+        });
     await s.reloadNotes();
     if (context.mounted) showToast(context, '资料已更新');
   });
