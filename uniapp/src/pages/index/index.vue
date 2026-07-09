@@ -36,6 +36,10 @@ function goCompose(type: string) {
   uni.navigateTo({ url: `/pages/compose/index?type=${type}` });
 }
 
+function goNotices() {
+  uni.navigateTo({ url: '/pages/notices/index' });
+}
+
 onShow(async () => {
   try { await session.boot(); } catch (error) { showError(error); }
 });
@@ -128,9 +132,10 @@ function openLegal(path: 'user-agreement' | 'privacy-policy') {
     </view>
 
     <template v-else>
-      <view v-if="activeNotices.length" class="card">
-        <view class="card-title"><text>今天请留意</text><text class="tag">{{ activeNotices.length }} 条</text></view>
-        <view v-for="notice in activeNotices" :key="notice.id" class="row"><view class="dot" /><view class="row-main"><text class="row-title">{{ notice.content }}</text><text class="row-meta">{{ notice.detail || '生效中的注意事项' }}</text></view></view>
+      <view class="card">
+        <view class="card-title" @click="goNotices()"><text>今天请留意</text><text class="tag">{{ activeNotices.length ? activeNotices.length + ' 条 ›' : '注意事项 ›' }}</text></view>
+        <view v-if="!activeNotices.length" class="empty">还没有生效中的注意事项。点这里管理医生叮嘱和要小心的事。</view>
+        <view v-for="notice in activeNotices" :key="notice.id" class="row" @click="goNotices()"><view class="dot" /><view class="row-main"><text class="row-title">{{ notice.content }}</text><text class="row-meta">{{ notice.detail || '生效中的注意事项' }}</text></view></view>
       </view>
 
       <view class="card">

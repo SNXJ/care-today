@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { createApi } from './api';
+import { createApi, photoUrl } from './api';
 
 import iconToday from './assets/icons/nav-today.svg';
 import iconTimeline from './assets/icons/nav-timeline.svg';
@@ -22,7 +22,7 @@ const navItems = [
   { id: 'timeline', label: '时间线', icon: iconTimeline },
   { id: 'moments', label: '分享', icon: iconChat },
   { id: 'body', label: '身体', icon: iconBody },
-  { id: 'notices', label: '注意', icon: iconWarning },
+  { id: 'files', label: '资料', icon: iconFolder },
 ];
 
 const view = ref('today');
@@ -66,6 +66,7 @@ const noteDraft = ref('');
 const composerOpen = ref(false);
 const questionsOpen = ref(false);
 const folderOpen = ref(false);
+const noticesOpen = ref(false);
 const membersOpen = ref(false);
 const currentRole = ref(localStorage.getItem('care-today-role') || '');
 const trendMetric = ref('疼痛');
@@ -82,6 +83,11 @@ const medications = ref([]);
 const detailItem = ref(null);
 const detailEditing = ref(false);
 const detailEditValues = ref({});
+// 图片附件：全屏预览灯箱 + 上传状态
+const lightbox = ref({ open: false, photos: [], index: 0 });
+const photoUploading = ref(false);
+const photoInput = ref(null);
+let photoInputResolver = null;
 const invitePhone = ref('');
 const privacyAccepted = ref(false);
 const api = createApi(() => token.value, {
@@ -639,12 +645,16 @@ function buildDetailEditFields(item) {
     ];
   }
   if (item.kind === 'message') {
-    return [{ name: 'text', label: '内容', value: raw.text, required: true, type: 'textarea', rows: 3 }];
+    return [
+      { name: 'text', label: '内容', value: raw.text, required: true, type: 'textarea', rows: 3 },
+      { name: 'photos', label: '照片', value: Array.isArray(raw.photos) ? [...raw.photos] : [], type: 'photos' },
+    ];
   }
   if (item.kind === 'note') {
     return [
       { name: 'title', label: '标题', value: raw.title, required: true },
       { name: 'content', label: '内容', value: raw.content || '', type: 'textarea', rows: 3 },
+      { name: 'photos', label: '照片', value: Array.isArray(raw.photos) ? [...raw.photos] : [], type: 'photos' },
     ];
   }
   if (item.kind === 'notice') {
@@ -693,12 +703,16 @@ async function saveDetailEdit() {
       });
       await loadQuestions();
     } else if (item.kind === 'message') {
-      await api.updateMessage(activeSpaceId.value, item.raw.id, { text: values.text.trim() });
+      await api.updateMessage(activeSpaceId.value, item.raw.id, {
+        text: values.text.trim(),
+        photos: Array.isArray(values.photos) ? values.photos : [],
+      });
       await loadMessages();
     } else if (item.kind === 'note') {
       await api.updateNote(activeSpaceId.value, item.raw.id, {
         title: values.title.trim(),
         content: values.content ?? '',
+        photos: Array.isArray(values.photos) ? values.photos : [],
       });
       await loadNotes();
     } else if (item.kind === 'notice') {
@@ -904,7 +918,11 @@ function openFormDialog(options) {
   return new Promise((resolve) => {
     const values = {};
     for (const field of options.fields || []) {
-      values[field.name] = field.value ?? '';
+      if (field.type === 'photos') {
+        values[field.name] = Array.isArray(field.value) ? [...field.value] : [];
+      } else {
+        values[field.name] = field.value ?? '';
+      }
     }
     dialog.value = {
       open: true,
@@ -951,6 +969,69 @@ function closeDialog(result) {
   if (resolver) {
     resolver(result);
   }
+}
+
+// —— 图片附件：灯箱预览 ——
+function photoSrc(id) {
+  return photoUrl(id);
+}
+
+function openLightbox(photos, index = 0) {
+  if (!photos || !photos.length) return;
+  lightbox.value = { open: true, photos: [...photos], index };
+}
+
+function closeLightbox() {
+  lightbox.value = { open: false, photos: [], index: 0 };
+}
+
+function lightboxStep(delta) {
+  const total = lightbox.value.photos.length;
+  if (!total) return;
+  lightbox.value.index = (lightbox.value.index + delta + total) % total;
+}
+
+// —— 图片附件：在表单/详情编辑里选图上传 ——
+function triggerPhotoUpload(target) {
+  if (photoUploading.value || !photoInput.value) return;
+  photoInputResolver = target; // 'dialog' | 'detail'
+  photoInput.value.value = '';
+  photoInput.value.click();
+}
+
+async function onPhotoInputChange(event) {
+  const file = event.target.files && event.target.files[0];
+  const target = photoInputResolver;
+  photoInputResolver = null;
+  if (!file || !target) return;
+  photoUploading.value = true;
+  try {
+    const result = await api.uploadPhoto(activeSpaceId.value, file);
+    const id = result.id;
+    if (target === 'dialog') {
+      const list = Array.isArray(dialog.value.values.photos) ? dialog.value.values.photos : [];
+      dialog.value.values.photos = [...list, id];
+    } else if (target === 'detail') {
+      const list = Array.isArray(detailEditValues.value.photos) ? detailEditValues.value.photos : [];
+      detailEditValues.value.photos = [...list, id];
+    }
+  } catch (error) {
+    showToast(error.message || '图片上传失败');
+  } finally {
+    photoUploading.value = false;
+  }
+}
+
+function removeDialogPhoto(index) {
+  const list = Array.isArray(dialog.value.values.photos) ? [...dialog.value.values.photos] : [];
+  list.splice(index, 1);
+  dialog.value.values.photos = list;
+}
+
+function removeDetailPhoto(index) {
+  const list = Array.isArray(detailEditValues.value.photos) ? [...detailEditValues.value.photos] : [];
+  list.splice(index, 1);
+  detailEditValues.value.photos = list;
 }
 
 async function copyText(text) {
@@ -1513,7 +1594,7 @@ const composerActions = [
 const composerScope = {
   moments: ['message'],
   body: ['bodyRecord', 'temperature', 'weight', 'symptom', 'medication'],
-  notices: ['notice'],
+  files: ['note'],
 };
 const visibleComposerActions = computed(() =>
   composerActions.filter((action) => {
@@ -1532,12 +1613,21 @@ async function runComposerAction(action) {
       title: '现在想说点什么？',
       message: '会发布到「分享」，家人朋友都能看到。',
       icon: iconMessage,
-      fields: [{ name: 'text', label: '内容', value: '', required: true, type: 'textarea', placeholder: '此刻的想法、状态或想说的话' }],
+      fields: [
+        { name: 'text', label: '内容', value: '', required: true, type: 'textarea', placeholder: '此刻的想法、状态或想说的话' },
+        { name: 'photos', label: '照片（可不选）', value: [], type: 'photos' },
+      ],
       confirmText: '发布',
     });
     if (!values) return;
-    messageDraft.value = values.text;
-    await addMessage();
+    await withLoading(async () => {
+      await api.createMessage(activeSpaceId.value, {
+        text: values.text.trim(),
+        photos: Array.isArray(values.photos) ? values.photos : [],
+      });
+      await loadMessages();
+      showToast('动态已发布');
+    });
     go('moments');
     return;
   }
@@ -1584,22 +1674,26 @@ async function runComposerAction(action) {
   }
   if (action.id === 'note') {
     const values = await openFormDialog({
-      eyebrow: '资料',
+      eyebrow: '复诊资料',
       title: '存一条复诊资料',
+      message: '检查报告、化验单可以直接上传照片存进来。',
       icon: iconFolder,
       fields: [
         { name: 'title', label: '资料名称', value: '', required: true, placeholder: '报告名称、用药记录或医嘱备注' },
         { name: 'content', label: '内容', value: '', type: 'textarea' },
+        { name: 'photos', label: '照片（可不选）', value: [], type: 'photos' },
       ],
       confirmText: '保存',
     });
     if (!values) return;
+    const notePhotos = Array.isArray(values.photos) ? values.photos : [];
     await withLoading(async () => {
       await api.createNote(activeSpaceId.value, {
         title: values.title.trim(),
-        type: '文本资料',
+        type: notePhotos.length ? '图片资料' : '文本资料',
         content: values.content?.trim() || '',
         visibility: 'PATIENT_ADMIN',
+        photos: notePhotos,
       });
       await loadNotes();
       showToast('资料已保存');
@@ -1627,11 +1721,17 @@ async function editMessage(message) {
     eyebrow: '动态',
     title: '编辑动态',
     icon: iconMessage,
-    fields: [{ name: 'text', label: '内容', value: message.text, required: true, type: 'textarea' }],
+    fields: [
+      { name: 'text', label: '内容', value: message.text, required: true, type: 'textarea' },
+      { name: 'photos', label: '照片', value: Array.isArray(message.photos) ? [...message.photos] : [], type: 'photos' },
+    ],
   });
   if (!values) return;
   await withLoading(async () => {
-    await api.updateMessage(activeSpaceId.value, message.id, { text: values.text.trim() });
+    await api.updateMessage(activeSpaceId.value, message.id, {
+      text: values.text.trim(),
+      photos: Array.isArray(values.photos) ? values.photos : [],
+    });
     await loadMessages();
     showToast('动态已更新');
   });
@@ -1674,19 +1774,23 @@ async function addNote() {
 
 async function editNote(note) {
   const values = await openFormDialog({
-    eyebrow: '资料夹',
+    eyebrow: '复诊资料',
     title: '编辑资料',
     icon: iconFolder,
     fields: [
       { name: 'title', label: '资料标题', value: note.title, required: true },
       { name: 'content', label: '资料内容', value: note.content || '', type: 'textarea' },
+      { name: 'photos', label: '照片', value: Array.isArray(note.photos) ? [...note.photos] : [], type: 'photos' },
     ],
   });
   if (!values) return;
+  const notePhotos = Array.isArray(values.photos) ? values.photos : [];
   await withLoading(async () => {
     await api.updateNote(activeSpaceId.value, note.id, {
       title: values.title.trim(),
       content: values.content ?? note.content ?? '',
+      type: notePhotos.length ? '图片资料' : '文本资料',
+      photos: notePhotos,
     });
     await loadNotes();
     showToast('资料已更新');
@@ -1969,6 +2073,7 @@ function mapMessage(message) {
     id: message.id,
     text: message.text,
     author: message.author,
+    photos: Array.isArray(message.photos) ? message.photos : [],
     time: new Date(message.createdAt).toLocaleString('zh-CN'),
     createdAt: message.createdAt,
   };
@@ -1980,6 +2085,7 @@ function mapNote(note) {
     title: note.title,
     type: note.type,
     content: note.content,
+    photos: Array.isArray(note.photos) ? note.photos : [],
     desc: new Date(note.createdAt).toLocaleString('zh-CN'),
     visibility: note.visibility === 'PATIENT_ADMIN' ? '患者和管理员可见' : '空间成员可见',
     createdAt: note.createdAt,
@@ -2245,7 +2351,7 @@ function mapMember(member) {
                 <strong>{{ nextVisitCountdown === null ? '—' : nextVisitCountdown }}</strong>
                 <small>{{ nextVisitCountdown === null ? '还没有安排日程。' : nextVisitCountdown === 0 ? '今天，把资料和问题带上。' : '提前整理资料和问题。' }}</small>
                 <button class="small-btn" type="button" @click="questionsOpen = true">问题清单</button>
-                <button class="small-btn" type="button" @click="folderOpen = true">复诊资料</button>
+                <button class="small-btn" type="button" @click="noticesOpen = true">注意事项</button>
               </div>
             </div>
           </article>
@@ -2379,6 +2485,9 @@ function mapMember(member) {
             <div v-else class="message-list moments-feed">
               <component :is="isPatient ? 'button' : 'div'" v-for="message in messages" :key="message.id" class="message" :class="{ tappable: isPatient }" type="button" @click="isPatient && openManage('message', message)">
                 <p>{{ message.text }}</p>
+                <div v-if="message.photos && message.photos.length" class="photo-grid" @click.stop>
+                  <img v-for="(pid, pi) in message.photos" :key="pid" :src="photoSrc(pid)" alt="" @click="openLightbox(message.photos, pi)" />
+                </div>
                 <span>{{ message.author }} · {{ message.time }}</span>
               </component>
             </div>
@@ -2606,38 +2715,36 @@ function mapMember(member) {
         </article>
       </section>
 
-      <section v-else-if="view === 'notices'" class="single-stack">
+      <section v-else-if="view === 'files'" class="single-stack">
         <article class="card">
           <header class="card-header">
             <div class="card-title">
-              <img class="icon" :src="iconWarning" alt="" aria-hidden="true" />
-              <h2>注意事项</h2>
+              <img class="icon" :src="iconFolder" alt="" aria-hidden="true" />
+              <h2>复诊资料</h2>
             </div>
-            <span class="tag">生效中置顶</span>
+            <span class="tag">{{ notes.length ? `共 ${notes.length} 条` : '拍照或文字存档' }}</span>
           </header>
           <div class="card-body">
-            <p class="section-hint">点一条可编辑、归档或删除。</p>
-            <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。</p>
-            <div class="notice-list">
-              <button v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
-                <span class="title-icon amber sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
-                <div>
-                  <strong>{{ notice.content }}</strong>
-                  <span>{{ noticeRangeLabel(notice) }}<template v-if="notice.detail"> · {{ notice.detail }}</template></span>
+            <p class="section-hint">检查报告、化验单可以上传照片存档，复诊时直接翻给医生看。</p>
+            <p v-if="!notes.length" class="empty-note">还没有资料。点右下角「+」上传照片或记录第一条。</p>
+            <div v-else class="note-card-list">
+              <div v-for="note in notes" :key="note.id" class="note-card">
+                <div class="note-card-head">
+                  <span class="title-icon sage sm"><img :src="iconFolder" alt="" aria-hidden="true" /></span>
+                  <div class="note-card-title">
+                    <strong>{{ note.title }}</strong>
+                    <span>{{ note.type }} · {{ note.desc }}</span>
+                  </div>
+                  <div class="row-actions">
+                    <button class="small-btn sage" type="button" @click="editNote(note)">编辑</button>
+                    <button class="small-btn danger" type="button" @click="deleteNote(note)">删除</button>
+                  </div>
                 </div>
-                <span class="chevron">›</span>
-              </button>
-            </div>
-            <div v-if="archivedNotices.length" class="notice-archived">
-              <p class="section-hint">已归档（不再显示在「今天」）</p>
-              <button v-for="notice in archivedNotices" :key="notice.id" class="notice-row archived" type="button" @click="openManage('notice', notice)">
-                <span class="title-icon sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
-                <div>
-                  <strong>{{ notice.content }}</strong>
-                  <span>{{ noticeRangeLabel(notice) }}</span>
+                <p v-if="note.content" class="note-card-content">{{ note.content }}</p>
+                <div v-if="note.photos && note.photos.length" class="photo-grid">
+                  <img v-for="(pid, pi) in note.photos" :key="pid" :src="photoSrc(pid)" alt="" @click="openLightbox(note.photos, pi)" />
                 </div>
-                <span class="chevron">›</span>
-              </button>
+              </div>
             </div>
           </div>
         </article>
@@ -2670,9 +2777,17 @@ function mapMember(member) {
               <dt>{{ field.label }}</dt>
               <dd>{{ field.value }}</dd>
             </div>
+            <div v-if="detailItem.photos && detailItem.photos.length" class="detail-photos-row">
+              <dt>照片</dt>
+              <dd>
+                <div class="photo-grid">
+                  <img v-for="(pid, pi) in detailItem.photos" :key="pid" :src="photoSrc(pid)" alt="" @click="openLightbox(detailItem.photos, pi)" />
+                </div>
+              </dd>
+            </div>
           </dl>
           <div v-else class="dialog-fields detail-edit-fields">
-            <label v-for="field in detailEditFields" :key="field.name" class="dialog-field" :class="{ checkbox: field.type === 'checkbox' }">
+            <label v-for="field in detailEditFields" :key="field.name" class="dialog-field" :class="{ checkbox: field.type === 'checkbox', 'photos-field': field.type === 'photos' }">
               <span>{{ field.label }}</span>
               <textarea
                 v-if="field.type === 'textarea'"
@@ -2685,6 +2800,15 @@ function mapMember(member) {
                 v-model="detailEditValues[field.name]"
                 type="checkbox"
               />
+              <div v-else-if="field.type === 'photos'" class="photo-picker">
+                <div v-for="(pid, pi) in (detailEditValues[field.name] || [])" :key="pid" class="photo-thumb">
+                  <img :src="photoSrc(pid)" alt="" @click="openLightbox(detailEditValues[field.name], pi)" />
+                  <button type="button" class="photo-remove" @click.prevent="removeDetailPhoto(pi)">×</button>
+                </div>
+                <button type="button" class="photo-add" :disabled="photoUploading" @click.prevent="triggerPhotoUpload('detail')">
+                  {{ photoUploading ? '…' : '＋' }}
+                </button>
+              </div>
               <input
                 v-else
                 v-model="detailEditValues[field.name]"
@@ -2953,6 +3077,47 @@ function mapMember(member) {
       </section>
     </div>
 
+    <div v-if="noticesOpen" class="modal-backdrop" role="presentation" @click.self="noticesOpen = false">
+      <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="notices-title">
+        <div class="confirm-icon accent-amber">
+          <img :src="iconWarning" alt="" aria-hidden="true" />
+        </div>
+        <div>
+          <p class="eyebrow">生效中置顶</p>
+          <h2 id="notices-title">注意事项</h2>
+          <p class="section-hint">点一条可编辑、归档或删除。生效期间每天在「今天」页置顶提醒。</p>
+          <p v-if="!activeNotices.length && !archivedNotices.length" class="empty-note">还没有注意事项。</p>
+          <div class="notice-list">
+            <button v-for="notice in notices.filter((item) => !item.archived)" :key="notice.id" class="notice-row" :class="{ important: notice.important }" type="button" @click="openManage('notice', notice)">
+              <span class="title-icon amber sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
+              <div>
+                <strong>{{ notice.content }}</strong>
+                <span>{{ noticeRangeLabel(notice) }}<template v-if="notice.detail"> · {{ notice.detail }}</template></span>
+              </div>
+              <span class="chevron">›</span>
+            </button>
+          </div>
+          <div v-if="archivedNotices.length" class="notice-archived">
+            <p class="section-hint">已归档（不再显示在「今天」）</p>
+            <button v-for="notice in archivedNotices" :key="notice.id" class="notice-row archived" type="button" @click="openManage('notice', notice)">
+              <span class="title-icon sm"><img :src="iconWarning" alt="" aria-hidden="true" /></span>
+              <div>
+                <strong>{{ notice.content }}</strong>
+                <span>{{ noticeRangeLabel(notice) }}</span>
+              </div>
+              <span class="chevron">›</span>
+            </button>
+          </div>
+          <div class="form-row">
+            <button class="small-btn" type="button" @click="noticesOpen = false; composerOpen = false; runComposerAction({ id: 'notice' })">记一条注意事项</button>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn sage" type="button" @click="noticesOpen = false">关闭</button>
+        </div>
+      </section>
+    </div>
+
     <div v-if="membersOpen" class="modal-backdrop" role="presentation" @click.self="membersOpen = false">
       <section class="confirm-dialog panel-dialog" role="dialog" aria-modal="true" aria-labelledby="members-title">
         <div class="confirm-icon">
@@ -2996,7 +3161,7 @@ function mapMember(member) {
           <h2 id="app-dialog-title">{{ dialog.title }}</h2>
           <p v-if="dialog.message">{{ dialog.message }}</p>
           <div v-if="dialog.mode === 'form'" class="dialog-fields">
-            <label v-for="field in dialog.fields" :key="field.name" class="dialog-field">
+            <label v-for="field in dialog.fields" :key="field.name" class="dialog-field" :class="{ 'photos-field': field.type === 'photos' }">
               <span>{{ field.label }}</span>
               <textarea
                 v-if="field.type === 'textarea'"
@@ -3010,6 +3175,15 @@ function mapMember(member) {
                 v-model="dialog.values[field.name]"
                 type="checkbox"
               />
+              <div v-else-if="field.type === 'photos'" class="photo-picker">
+                <div v-for="(pid, pi) in (dialog.values[field.name] || [])" :key="pid" class="photo-thumb">
+                  <img :src="photoSrc(pid)" alt="" @click="openLightbox(dialog.values[field.name], pi)" />
+                  <button type="button" class="photo-remove" @click.prevent="removeDialogPhoto(pi)">×</button>
+                </div>
+                <button type="button" class="photo-add" :disabled="photoUploading" @click.prevent="triggerPhotoUpload('dialog')">
+                  {{ photoUploading ? '…' : '＋' }}
+                </button>
+              </div>
               <input
                 v-else
                 v-model="dialog.values[field.name]"
@@ -3027,6 +3201,16 @@ function mapMember(member) {
           </button>
         </div>
       </section>
+    </div>
+
+    <!-- 图片附件：隐藏文件选择器 + 全屏灯箱预览 -->
+    <input ref="photoInput" class="photo-input" type="file" accept="image/*" @change="onPhotoInputChange" />
+    <div v-if="lightbox.open" class="lightbox" role="dialog" aria-modal="true" @click.self="closeLightbox">
+      <button class="lightbox-close" type="button" aria-label="关闭" @click="closeLightbox">×</button>
+      <button v-if="lightbox.photos.length > 1" class="lightbox-nav prev" type="button" aria-label="上一张" @click.stop="lightboxStep(-1)">‹</button>
+      <img :src="photoSrc(lightbox.photos[lightbox.index])" alt="" />
+      <button v-if="lightbox.photos.length > 1" class="lightbox-nav next" type="button" aria-label="下一张" @click.stop="lightboxStep(1)">›</button>
+      <span v-if="lightbox.photos.length > 1" class="lightbox-count">{{ lightbox.index + 1 }} / {{ lightbox.photos.length }}</span>
     </div>
   </div>
 </template>

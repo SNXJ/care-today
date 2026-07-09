@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { api } from '../../api/client';
+import { api, photoUrl } from '../../api/client';
 import { refreshCurrentSpace, useSession } from '../../state/session';
 import { dateKey, showError } from '../../utils/format';
 
@@ -12,7 +12,34 @@ const editKind = ref('');
 const editId = ref('');
 const isEditing = computed(() => !!editKind.value);
 const today = dateKey();
-const form = reactive({ title: '', content: '', note: '', answer: '', date: today, time: '09:00', value: '', tag: '', important: false, needsCompanion: false, painScore: 0, fatigueScore: 0, sleepScore: 5, moodScore: 5, appetiteScore: 5 });
+const form = reactive({ title: '', content: '', note: '', answer: '', date: today, time: '09:00', value: '', tag: '', important: false, needsCompanion: false, painScore: 0, fatigueScore: 0, sleepScore: 5, moodScore: 5, appetiteScore: 5, photos: [] as string[] });
+const uploadingPhoto = ref(false);
+// 支持照片的类型：分享、复诊资料
+const supportsPhotos = computed(() => ['message', 'note'].includes(isEditing.value ? editKind.value : selectedType.value));
+
+async function pickPhoto() {
+  if (uploadingPhoto.value || !session.data.space?.id) return;
+  try {
+    const chosen = await uni.chooseImage({ count: 1, sizeType: ['compressed'], sourceType: ['album', 'camera'] });
+    const path = (chosen.tempFilePaths || [])[0];
+    if (!path) return;
+    uploadingPhoto.value = true;
+    const result = await api.uploadPhoto(session.data.space.id, path);
+    form.photos = [...form.photos, result.id];
+  } catch (error) {
+    showError(error);
+  } finally {
+    uploadingPhoto.value = false;
+  }
+}
+
+function removePhoto(index: number) {
+  form.photos = form.photos.filter((_, i) => i !== index);
+}
+
+function previewPhoto(index: number) {
+  uni.previewImage({ urls: form.photos.map(photoUrl), current: index });
+}
 const actions = [
   { id: 'message', label: '说说此刻', desc: '发布给家人看', patient: true },
   { id: 'event', label: '加日程', desc: '复诊、检查、提醒' },
@@ -64,9 +91,9 @@ function prefill(kind: string, r: any) {
     form.title = r.title || ''; form.content = r.location || ''; form.note = r.note || '';
     form.date = dateKey(r.scheduledAt); form.time = timeStr(r.scheduledAt); form.needsCompanion = !!r.needsCompanion;
   } else if (kind === 'message') {
-    selectedType.value = 'message'; form.content = r.text || '';
+    selectedType.value = 'message'; form.content = r.text || ''; form.photos = Array.isArray(r.photos) ? [...r.photos] : [];
   } else if (kind === 'note') {
-    selectedType.value = 'note'; form.title = r.title || ''; form.content = r.content || '';
+    selectedType.value = 'note'; form.title = r.title || ''; form.content = r.content || ''; form.photos = Array.isArray(r.photos) ? [...r.photos] : [];
   } else if (kind === 'notice') {
     selectedType.value = 'notice'; form.content = r.content || ''; form.note = r.detail || '';
     form.date = r.startsOn || today; form.value = r.endsOn || ''; form.important = !!r.important;
@@ -100,7 +127,7 @@ async function doCreate(id: string): Promise<boolean> {
   switch (selectedType.value) {
     case 'message':
       if (!requireValue(form.content, '请写下想分享的内容')) return false;
-      await api.createMessage(id, { text: form.content.trim() }); return true;
+      await api.createMessage(id, { text: form.content.trim(), photos: form.photos }); return true;
     case 'event':
       if (!requireValue(form.title, '请填写日程标题')) return false;
       await api.createEvent(id, { title: form.title.trim(), scheduledAt: isoDateTime(), location: form.content.trim() || undefined, note: form.note.trim() || undefined, needsCompanion: form.needsCompanion }); return true;
@@ -126,7 +153,7 @@ async function doCreate(id: string): Promise<boolean> {
       await api.createQuestion(id, { question: form.content.trim(), important: form.important }); return true;
     case 'note':
       if (!requireValue(form.title, '请填写资料标题')) return false;
-      await api.createNote(id, { title: form.title.trim(), type: '文本资料', content: form.content.trim(), visibility: 'PATIENT_ADMIN' }); return true;
+      await api.createNote(id, { title: form.title.trim(), type: form.photos.length ? '图片资料' : '文本资料', content: form.content.trim(), visibility: 'PATIENT_ADMIN', photos: form.photos }); return true;
   }
   return false;
 }
@@ -138,10 +165,10 @@ async function doUpdate(id: string): Promise<boolean> {
       await api.updateEvent(id, editId.value, { title: form.title.trim(), scheduledAt: isoDateTime(), location: form.content.trim() || undefined, note: form.note.trim() || undefined, needsCompanion: form.needsCompanion }); return true;
     case 'message':
       if (!requireValue(form.content, '请写下想分享的内容')) return false;
-      await api.updateMessage(id, editId.value, { text: form.content.trim() }); return true;
+      await api.updateMessage(id, editId.value, { text: form.content.trim(), photos: form.photos }); return true;
     case 'note':
       if (!requireValue(form.title, '请填写资料标题')) return false;
-      await api.updateNote(id, editId.value, { title: form.title.trim(), content: form.content.trim() }); return true;
+      await api.updateNote(id, editId.value, { title: form.title.trim(), content: form.content.trim(), type: form.photos.length ? '图片资料' : '文本资料', photos: form.photos }); return true;
     case 'notice':
       if (!requireValue(form.content, '请填写注意事项')) return false;
       await api.updateNotice(id, editId.value, { content: form.content.trim(), detail: form.note.trim() || undefined, important: form.important, startsOn: form.date, endsOn: form.value || undefined }); return true;
@@ -173,6 +200,15 @@ async function submit() {
     <view v-if="['event','note'].includes(selectedType)" class="field"><text class="label">标题</text><input v-model="form.title" class="input" placeholder="简短说清楚这件事" /></view>
     <view v-if="['message','notice','question','note'].includes(selectedType)" class="field"><text class="label">{{ selectedType === 'question' ? '问题' : selectedType === 'message' ? '想说的话' : '内容' }}</text><textarea v-model="form.content" class="textarea" placeholder="写在这里" /></view>
     <view v-if="selectedType === 'question' && isEditing" class="field"><text class="label">医生答复（可选）</text><textarea v-model="form.answer" class="textarea" placeholder="记录医生的回复" /></view>
+    <view v-if="supportsPhotos" class="field"><text class="label">照片（可不选）</text>
+      <view class="photo-picker">
+        <view v-for="(pid, pi) in form.photos" :key="pid" class="photo-thumb">
+          <image class="photo-img" :src="photoUrl(pid)" mode="aspectFill" @click="previewPhoto(pi)" />
+          <view class="photo-remove" @click.stop="removePhoto(pi)">×</view>
+        </view>
+        <view class="photo-add" :class="{ disabled: uploadingPhoto }" @click="pickPhoto()">{{ uploadingPhoto ? '…' : '＋' }}</view>
+      </view>
+    </view>
     <view v-if="selectedType === 'event'" class="field"><text class="label">地点</text><input v-model="form.content" class="input" placeholder="可选" /></view>
     <view v-if="['temperature','weight'].includes(selectedType)" class="field"><text class="label">{{ selectedType === 'temperature' ? '体温（℃）' : '体重（kg）' }}</text><input v-model="form.value" class="input" type="digit" placeholder="请输入数值" /></view>
     <view v-if="selectedType === 'symptom'" class="field"><text class="label">症状</text><view class="chips"><text v-for="tag in ['大便','腹泻','发烧','乏力','疼痛','手脚发麻']" :key="tag" class="chip" :class="{ active: form.tag === tag }" @click="form.tag = tag">{{ tag }}</text></view><input v-model="form.tag" class="input" placeholder="也可以自己填写" /></view>

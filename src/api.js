@@ -1,6 +1,11 @@
 const API_BASE = import.meta.env.VITE_API_BASE || '/api';
 const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 60 * 1000;
 
+/// 图片附件的访问地址（fileId 为不可猜测的 UUID）。
+export function photoUrl(id) {
+  return `${API_BASE}/files/${id}`;
+}
+
 export function createApi(getToken, handlers = {}) {
   let refreshPromise = null;
 
@@ -59,8 +64,29 @@ export function createApi(getToken, handlers = {}) {
     return response.json();
   }
 
+  async function uploadFile(path, file) {
+    const headers = {};
+    const token = getToken();
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: formData });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      if (response.status === 401) {
+        handlers.onAuthExpired?.();
+        throw new Error('登录已过期，请重新登录');
+      }
+      throw new Error(error.reason || error.message || `上传失败：${response.status}`);
+    }
+    return response.json();
+  }
+
   return {
     register: (body) => request('/auth/register', { method: 'POST', body }),
+    uploadPhoto: (spaceId, file) => uploadFile(`/spaces/${spaceId}/files`, file),
     login: (body) => request('/auth/login', { method: 'POST', body }),
     refresh: () => request('/auth/refresh', { method: 'POST' }, { skipRefresh: true }),
     listSpaces: () => request('/spaces'),

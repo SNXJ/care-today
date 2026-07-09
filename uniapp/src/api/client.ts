@@ -31,8 +31,41 @@ async function request<T = any>(path: string, options: RequestOptions = {}): Pro
   });
 }
 
+/// 图片附件的访问地址（fileId 为不可猜测的 UUID）。
+export function photoUrl(id: string): string {
+  return `${API_BASE}/files/${id}`;
+}
+
+/// 上传一张图片（本地临时路径），返回 {id, url}。
+function uploadPhoto(spaceId: string, filePath: string): Promise<{ id: string; url: string }> {
+  const token = uni.getStorageSync('care-today-token');
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: `${API_BASE}/spaces/${spaceId}/files`,
+      filePath,
+      name: 'file',
+      header: token ? { Authorization: `Bearer ${token}` } : {},
+      success(response) {
+        if (response.statusCode >= 200 && response.statusCode < 300) {
+          try {
+            resolve(JSON.parse(response.data));
+          } catch (e) {
+            reject(new Error('上传返回解析失败'));
+          }
+          return;
+        }
+        let reason = `上传失败（${response.statusCode}）`;
+        try { reason = JSON.parse(response.data).reason || reason; } catch (e) { /* ignore */ }
+        reject(new Error(reason));
+      },
+      fail: (error) => reject(new Error(error.errMsg || '图片上传失败')),
+    });
+  });
+}
+
 export const api = {
   register: (data: any) => request('/auth/register', { method: 'POST', data }),
+  uploadPhoto,
   login: (data: any) => request('/auth/login', { method: 'POST', data }),
   listSpaces: () => request<any[]>('/spaces'),
   createSpace: (data: any) => request('/spaces', { method: 'POST', data }),
