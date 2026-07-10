@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CareToday 运营后台</title>
+  <style>
+    :root {
+      --paper: #fbf8f4; --panel: #fffdf9; --ink: #2e2a27; --muted: #766b62;
+      --line: #eadfd3; --rose: #b85f55; --sage: #78927c; --amber: #c8893f;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; background: var(--paper); color: var(--ink);
+      font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      padding: 24px; line-height: 1.6;
+    }
+    .wrap { max-width: 1020px; margin: 0 auto; }
+    h1 { font-family: Georgia, serif; font-size: 28px; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+    .card {
+      background: var(--panel); border: 1px solid var(--line);
+      border-radius: 16px; padding: 20px; margin-bottom: 18px;
+    }
+    .card h2 { font-size: 17px; margin: 0 0 14px; }
+    label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+    input[type=text], input[type=password] {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--line);
+      border-radius: 10px; font: inherit; background: #fff;
+    }
+    button {
+      border: none; border-radius: 10px; padding: 10px 18px; font: inherit;
+      font-weight: 600; cursor: pointer; background: var(--sage); color: #fff;
+      margin-top: 14px;
+    }
+    button.ghost { background: transparent; color: var(--rose); border: 1px solid var(--line); }
+    button:disabled { opacity: .5; cursor: default; }
+    .hidden { display: none; }
+    .msg { font-size: 13px; margin-top: 10px; }
+    .msg.err { color: var(--rose); }
+    .msg.ok { color: var(--sage); }
+    .badge { font-size: 11px; background: #fdeee2; color: var(--amber); padding: 2px 8px; border-radius: 20px; }
+    .who { float: right; font-size: 13px; color: var(--muted); }
+
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+    .tabs button {
+      margin: 0; padding: 8px 18px; border-radius: 999px; font-size: 14px;
+      background: transparent; color: var(--muted); border: 1px solid var(--line);
+    }
+    .tabs button.active { background: var(--rose); border-color: var(--rose); color: #fff; }
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .stat {
+      background: #fff; border: 1px solid var(--line); border-radius: 14px;
+      padding: 14px 16px;
+    }
+    .stat b { display: block; font-family: Georgia, serif; font-size: 26px; color: var(--rose); line-height: 1.2; }
+    .stat span { font-size: 12px; color: var(--muted); }
+    .stat.sage b { color: var(--sage); }
+    .stat.amber b { color: var(--amber); }
+    .chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; margin-top: 10px; }
+    .chart .bar { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; height: 100%; }
+    .chart .bar > i { width: 100%; max-width: 34px; background: var(--sage); border-radius: 6px 6px 0 0; min-height: 2px; }
+    .chart .bar small { font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .chart .bar b { font-size: 11px; color: var(--ink); }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 10px; border-top: 1px solid var(--line); white-space: nowrap; }
+    th { color: var(--muted); font-weight: 600; border-top: none; }
+    tr.clickable { cursor: pointer; }
+    tr.clickable:hover td { background: #fff7ee; }
+    td.num, th.num { text-align: right; }
+    .thumb {
+      width: 52px; height: 52px; object-fit: cover; border-radius: 8px;
+      border: 1px solid var(--line); cursor: zoom-in; background: #fff;
+    }
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .photo-cell { display: flex; flex-direction: column; gap: 4px; }
+    .photo-cell img {
+      width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px;
+      border: 1px solid var(--line); cursor: zoom-in; background: #fff;
+    }
+    .photo-cell small { font-size: 11px; color: var(--muted); line-height: 1.4; overflow: hidden; text-overflow: ellipsis; }
+    .detail-block h3 { font-size: 14px; margin: 18px 0 6px; color: var(--rose); }
+    .detail-block h3:first-child { margin-top: 0; }
+    .detail-block p.item { margin: 0; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; }
+    .detail-block p.item small { color: var(--muted); display: block; }
+    .inline-photos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+    .crumb { color: var(--muted); font-size: 13px; cursor: pointer; margin-bottom: 8px; display: inline-block; }
+    .crumb:hover { color: var(--rose); }
+    #lightbox {
+      position: fixed; inset: 0; background: rgba(30, 24, 20, .82);
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+      gap: 12px; z-index: 50; padding: 24px; cursor: zoom-out;
+    }
+    #lightbox img { max-width: 92vw; max-height: 82vh; border-radius: 12px; background: #fff; }
+    #lightbox small { color: #f4ead9; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>CareToday 运营后台</h1>
+    <p class="sub">数据统计、用户与空间数据、全站图片。APK 发布请去 <a href="/manage/" style="color:var(--rose)">/manage/</a>。<span class="who" id="who"></span></p>
+
+    <section class="card" id="loginCard">
+      <h2>管理员登录</h2>
+      <label>手机号或邮箱</label>
+      <input type="text" id="account" autocomplete="username" />
+      <label>密码</label>
+      <input type="password" id="password" autocomplete="current-password" />
+      <button id="loginBtn">登录</button>
+      <div class="msg" id="loginMsg"></div>
+    </section>
+
+    <nav class="tabs hidden" id="tabs">
+      <button data-tab="overview" class="active">总览</button>
+      <button data-tab="users">用户</button>
+      <button data-tab="spaces">空间数据</button>
+      <button data-tab="photos">图片</button>
+      <button id="logoutBtn" style="margin-left:auto" class="ghost">退出</button>
+    </nav>
+
+    <!-- 总览 -->
+    <div class="hidden" id="tab-overview">
+      <section class="card">
+        <h2>数据总量</h2>
+        <div class="stat-grid" id="statGrid"></div>
+      </section>
+      <section class="card">
+        <h2>近 14 天新增 <span style="font-size:12px;color:var(--muted)">（绿=记录条数，黄=新用户）</span></h2>
+        <div class="chart" id="chart"></div>
+        <div class="msg" id="overviewMsg"></div>
+      </section>
+    </div>
+
+    <!-- 用户 -->
+    <div class="hidden" id="tab-users">
+      <section class="card">
+        <h2>全部用户</h2>
+        <div class="table-scroll"><table id="userTable"></table></div>
+        <div class="msg" id="usersMsg"></div>
+      </section>
+    </div>
+
+    <!-- 空间 -->
+    <div class="hidden" id="tab-spaces">
+      <section class="card" id="spaceListCard">
+        <h2>陪伴空间 <span style="font-size:12px;color:var(--muted)">点一行查看该空间全部数据</span></h2>
+        <div class="table-scroll"><table id="spaceTable"></table></div>
+        <div class="msg" id="spacesMsg"></div>
+      </section>
+      <section class="card hidden" id="spaceDetailCard">
+        <span class="crumb" id="backToSpaces">‹ 返回空间列表</span>
+        <div id="spaceDetail" class="detail-block"></div>
+      </section>
+    </div>
+
+    <!-- 图片 -->
+    <div class="hidden" id="tab-photos">
+      <section class="card">
+        <h2>全部图片 <span id="photoCount" style="font-size:12px;color:var(--muted)"></span></h2>
+        <div class="photo-grid" id="photoGrid"></div>
+        <div class="msg" id="photosMsg"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="lightbox" class="hidden">
+    <img id="lightboxImg" alt="" />
+    <small id="lightboxMeta"></small>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
