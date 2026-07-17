@@ -17,10 +17,24 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 下载与安装
 
-- 扫码 / 打开下载页：**https://your-domain.example/download/**
-- Android：在下载页点「下载 APK」直接安装；装好后 App 会**自动检查更新**（在「我的 → 检查更新」也可手动检查），有新版会弹窗下载并拉起安装。
-- iPhone / iPad：暂未上架，敬请期待。
-- 发版管理页（管理员）：**https://your-domain.example/manage/**，登录后上传新 APK、管理版本号。
+<table>
+  <tr>
+    <td width="180" align="center" valign="middle">
+      <img src="docs/screenshots/download-qr.png" width="150" alt="扫码下载 CareToday" /><br/>
+      <sub>微信/相机扫码下载</sub>
+    </td>
+    <td valign="middle">
+
+- 打开下载页：**https://care.ajieche.top/download/**（当前版本 **v1.2.0**）
+- **Android**：在下载页点「下载 APK」直接安装；装好后 App 会**自动检查更新**（在「我的 → 检查更新」也可手动检查），有新版会弹窗下载并拉起安装。
+- **微信小程序**：搜索并进入「CareToday / 陪你一起过今天」小程序即可使用（与 App 数据互通）。
+- **iPhone / iPad**：暂未上架，敬请期待。
+
+    </td>
+  </tr>
+</table>
+
+> 用微信内置浏览器打开下载页时，Android 需点右上角「···」→「在浏览器打开」再下载 APK。
 
 ## 界面预览
 
