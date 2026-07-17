@@ -38,25 +38,37 @@ CareToday 希望把这些事变得更清楚一点：
 
 ## 界面预览
 
-应用主界面 · 今天页（日程、下次复诊倒计时、身体记录、问医生、注意事项）：
+> Web、Flutter App、微信小程序三端共用同一套「温柔纸面」设计语言，界面与交互保持一致。
+
+**应用主界面 · 今天页**（日程、下次复诊倒计时、身体记录、问医生、注意事项入口）：
 
 | 桌面 | 移动 |
 | --- | --- |
 | ![应用主界面桌面](design-preview/preview.png) | ![应用主界面移动](design-preview/preview-mobile.png) |
 
-App 下载页（线上实拍，扫码即可安装）：
+**扫码下载页**（线上实拍，扫码即可安装）：
 
 | 桌面 | 手机 |
 | --- | --- |
 | ![下载页桌面](docs/screenshots/download-desktop.png) | ![下载页手机](docs/screenshots/download-mobile.png) |
 
-登录与发版管理页（线上实拍）：
+**Web 登录**（线上实拍）：
 
-| Web 登录 | 发版管理 |
+| 桌面 | 移动 |
 | --- | --- |
-| ![Web 登录](docs/screenshots/web-login-desktop.png) | ![发版管理页](docs/screenshots/manage-login.png) |
+| ![Web 登录桌面](docs/screenshots/web-login-desktop.png) | ![Web 登录移动](docs/screenshots/web-login-mobile.png) |
 
-> Flutter App 真机各页面（时间线连接线、身体趋势图、发布器弹层等）截图可放入 `docs/screenshots/` 后在此处补充。
+### App / 小程序真机功能截图（待补充）
+
+把以下截图放入 `docs/screenshots/` 后，会自动在此处展示（文件名对齐即可）：
+
+| 页面 | App 文件名 | 小程序文件名 |
+| --- | --- | --- |
+| 今天（日程 + 复诊倒计时 + 用药） | `app-today.png` | `mp-today.png` |
+| 分享（含照片上传与大图预览） | `app-share.png` | `mp-share.png` |
+| 复诊资料（拍照存档报告/化验单） | `app-files.png` | `mp-files.png` |
+| 身体（体温/体重趋势图） | `app-body.png` | `mp-body.png` |
+| 时间线（节点连接线） | `app-timeline.png` | `mp-timeline.png` |
 
 ## 当前状态
 
