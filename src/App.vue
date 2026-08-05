@@ -122,6 +122,8 @@ const notices = ref([]);
 const members = ref([]);
 
 const activeNav = computed(() => navItems.find((item) => item.id === view.value));
+// 「全部记录」是身体页的子页面，不出现在导航里，标题单独给。
+const pageTitle = computed(() => (view.value === 'records' ? '全部记录' : activeNav.value?.label || '今天'));
 const isAuthed = computed(() => Boolean(token.value && currentUser.value));
 const hasSpace = computed(() => Boolean(activeSpaceId.value));
 const todayKey = computed(() => toDateKey(new Date()));
@@ -458,13 +460,23 @@ const trendChart = computed(() => {
   const area = dots.length > 1
     ? `${dots[0].x.toFixed(1)},${baseY} ` + dots.map((dot) => `${dot.x.toFixed(1)},${dot.y.toFixed(1)}`).join(' ') + ` ${dots[dots.length - 1].x.toFixed(1)},${baseY}`
     : '';
-  const xTicks = points.map((point) => ({
-    key: point.key,
-    x: pointX(point),
-    y1: padTop,
-    y2: baseY,
-    label: point.label,
-  }));
+  // 横坐标标签按实际像素宽度贪心抽稀：网格线全画，标签只在放得下时渲染，避免重叠。
+  // 体温/体重带「月/日 时:分」，比纯「月/日」宽得多，所以两者预留宽度不同。
+  const labelWidth = measureMetrics.has(trendMetric.value) ? 74 : 42;
+  let lastLabelX = -Infinity;
+  const xTicks = points.map((point) => {
+    const x = pointX(point);
+    const showLabel = x - lastLabelX >= labelWidth;
+    if (showLabel) lastLabelX = x;
+    return {
+      key: point.key,
+      x,
+      y1: padTop,
+      y2: baseY,
+      label: point.label,
+      showLabel,
+    };
+  });
   const resolvedYTicks = yTicks.map((tick) => ({
     key: tick,
     value: tick,
@@ -524,16 +536,20 @@ const vitalFieldLabels = {
   heartRate: ['心率', '次/分'],
   bloodSugar: ['血糖', 'mmol/L'],
 };
-const allRecordsOpen = ref(false);
 const allRecordsKind = ref('symptom');
-const allRecordsDays = ref(30); // null = 全部
+const allRecordsDays = ref(30); // null = 全部；默认 30 天
 const allRecordsFrom = ref('');
 const allRecordsTo = ref('');
 const allRecordsQuery = ref('');
 
 function openAllRecords(kind) {
   allRecordsKind.value = kind;
-  allRecordsOpen.value = true;
+  resetAllRecordsFilter();
+  view.value = 'records';
+  window.scrollTo({ top: 0 });
+}
+function closeAllRecords() {
+  view.value = 'body';
 }
 function resetAllRecordsFilter() {
   allRecordsDays.value = 30;
@@ -655,7 +671,6 @@ function openAllRecordRow(row) {
   if (row.kind === 'vital') {
     const kind = row.raw.temperature !== null && row.raw.temperature !== undefined ? 'temperature' : 'weight';
     if (row.raw[kind] === null || row.raw[kind] === undefined) return undefined;
-    allRecordsOpen.value = false;
     return editBodyMeasure(row.raw, kind);
   }
   return undefined;
@@ -2385,7 +2400,7 @@ function mapMember(member) {
     <main>
       <section class="topbar">
         <div>
-          <h1>{{ activeNav?.label || '今天' }}</h1>
+          <h1>{{ pageTitle }}</h1>
         </div>
         <div class="top-actions">
           <div class="privacy-pill">
@@ -2702,7 +2717,7 @@ function mapMember(member) {
                 <g class="trend-x-grid">
                   <template v-for="tick in trendChart.xTicks" :key="tick.key">
                     <line :x1="tick.x" :y1="tick.y1" :x2="tick.x" :y2="tick.y2" class="trend-grid vertical" />
-                    <text :x="tick.x" :y="trendChart.height - 18" text-anchor="middle" class="trend-tick-label trend-x-label">{{ tick.label }}</text>
+                    <text v-if="tick.showLabel" :x="tick.x" :y="trendChart.height - 18" text-anchor="middle" class="trend-tick-label trend-x-label">{{ tick.label }}</text>
                   </template>
                 </g>
                 <line :x1="trendChart.padLeft" :y1="trendChart.baseY" :x2="trendChart.chartRight" :y2="trendChart.baseY" class="trend-axis" />
@@ -2901,6 +2916,74 @@ function mapMember(member) {
         </article>
         <article class="card urgent">
           <div class="card-body boundary">{{ disclaimer }}</div>
+        </article>
+      </section>
+
+      <!-- 全部记录：身体页的子页面，四类记录完整历史 -->
+      <section v-else-if="view === 'records'" class="single-stack">
+        <article class="card">
+          <header class="card-header records-header">
+            <button class="small-btn" type="button" @click="closeAllRecords">‹ 返回身体</button>
+            <span class="tag">{{ allRecordsFiltered.length === allRecordsSource.length ? `共 ${allRecordsSource.length} 条` : `${allRecordsFiltered.length} / ${allRecordsSource.length} 条` }}</span>
+          </header>
+          <div class="card-body">
+            <div class="records-filters">
+              <div class="records-field">
+                <span class="records-field-label">类别</span>
+                <div class="records-tabs">
+                  <button
+                    v-for="(label, kind) in recordKindLabels"
+                    :key="kind"
+                    class="trend-chip"
+                    :class="{ active: allRecordsKind === kind }"
+                    type="button"
+                    @click="allRecordsKind = kind"
+                  >
+                    {{ label }}
+                  </button>
+                </div>
+              </div>
+              <div class="records-field">
+                <span class="records-field-label">时间</span>
+                <div class="records-tabs">
+                  <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 7 }" type="button" @click="pickAllRecordsDays(7)">7 天</button>
+                  <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 30 }" type="button" @click="pickAllRecordsDays(30)">30 天</button>
+                  <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 90 }" type="button" @click="pickAllRecordsDays(90)">90 天</button>
+                  <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && !allRecordsDays }" type="button" @click="pickAllRecordsDays(null)">全部</button>
+                  <label class="records-date">从 <input v-model="allRecordsFrom" type="date" /></label>
+                  <label class="records-date">到 <input v-model="allRecordsTo" type="date" /></label>
+                </div>
+              </div>
+              <div class="records-field">
+                <span class="records-field-label">搜索</span>
+                <div class="records-search">
+                  <input v-model="allRecordsQuery" class="input" type="search" :placeholder="`搜索${recordKindLabels[allRecordsKind]}内容或备注`" />
+                  <button v-if="allRecordsFrom || allRecordsTo || allRecordsQuery || allRecordsDays !== 30" class="small-btn" type="button" @click="resetAllRecordsFilter">重置</button>
+                </div>
+              </div>
+            </div>
+            <p v-if="!allRecordsFiltered.length" class="empty-note">这个时间范围内没有{{ recordKindLabels[allRecordsKind] }}记录。</p>
+            <template v-for="group in allRecordsGroups" :key="group.day">
+              <h3 class="symptom-subhead">{{ group.label }} <small>{{ group.items.length }} 条</small></h3>
+              <div class="symptom-list">
+                <button
+                  v-for="row in group.items"
+                  :key="`${row.kind}-${row.id}-${row.time}`"
+                  class="symptom-row"
+                  :class="{ past: group.day !== todayKey }"
+                  type="button"
+                  @click="openAllRecordRow(row)"
+                >
+                  <strong class="time">{{ row.clock }}</strong>
+                  <div>
+                    <strong>{{ row.title }}</strong>
+                    <span v-if="row.subtitle">{{ row.subtitle }}</span>
+                  </div>
+                  <span v-if="row.kind !== 'score'" class="chevron">›</span>
+                </button>
+              </div>
+            </template>
+          </div>
         </article>
       </section>
 
@@ -3224,68 +3307,6 @@ function mapMember(member) {
         </div>
         <div class="confirm-actions">
           <button class="small-btn sage" type="button" @click="folderOpen = false">关闭</button>
-        </div>
-      </section>
-    </div>
-
-    <div v-if="allRecordsOpen" class="modal-backdrop" role="presentation" @click.self="allRecordsOpen = false">
-      <section class="confirm-dialog panel-dialog records-dialog" role="dialog" aria-modal="true" aria-labelledby="all-records-title">
-        <div>
-          <p class="eyebrow">完整历史</p>
-          <h2 id="all-records-title">全部记录</h2>
-          <div class="records-tabs">
-            <button
-              v-for="(label, kind) in recordKindLabels"
-              :key="kind"
-              class="trend-chip"
-              :class="{ active: allRecordsKind === kind }"
-              type="button"
-              @click="allRecordsKind = kind"
-            >
-              {{ label }}
-            </button>
-          </div>
-          <div class="records-tabs">
-            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 7 }" type="button" @click="pickAllRecordsDays(7)">7 天</button>
-            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 30 }" type="button" @click="pickAllRecordsDays(30)">30 天</button>
-            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 90 }" type="button" @click="pickAllRecordsDays(90)">90 天</button>
-            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && !allRecordsDays }" type="button" @click="pickAllRecordsDays(null)">全部</button>
-          </div>
-          <div class="records-range">
-            <label>从 <input v-model="allRecordsFrom" type="date" class="input" /></label>
-            <label>到 <input v-model="allRecordsTo" type="date" class="input" /></label>
-          </div>
-          <input v-model="allRecordsQuery" class="input" type="search" :placeholder="`搜索${recordKindLabels[allRecordsKind]}内容或备注`" />
-          <p class="section-hint">
-            {{ allRecordsFiltered.length === allRecordsSource.length ? `共 ${allRecordsSource.length} 条` : `筛选出 ${allRecordsFiltered.length} 条 / 共 ${allRecordsSource.length} 条` }}
-            <button v-if="allRecordsFrom || allRecordsTo || allRecordsQuery || allRecordsDays !== 30" class="link-btn" type="button" @click="resetAllRecordsFilter">重置筛选</button>
-          </p>
-          <p v-if="!allRecordsFiltered.length" class="empty-note">这个时间范围内没有{{ recordKindLabels[allRecordsKind] }}记录。</p>
-          <div v-else class="records-scroll">
-            <template v-for="group in allRecordsGroups" :key="group.day">
-              <h3 class="symptom-subhead">{{ group.label }} <small>{{ group.items.length }} 条</small></h3>
-              <div class="symptom-list">
-                <button
-                  v-for="row in group.items"
-                  :key="`${row.kind}-${row.id}-${row.time}`"
-                  class="symptom-row"
-                  :class="{ past: group.day !== todayKey }"
-                  type="button"
-                  @click="openAllRecordRow(row)"
-                >
-                  <strong class="time">{{ row.clock }}</strong>
-                  <div>
-                    <strong>{{ row.title }}</strong>
-                    <span v-if="row.subtitle">{{ row.subtitle }}</span>
-                  </div>
-                  <span v-if="row.kind !== 'score'" class="chevron">›</span>
-                </button>
-              </div>
-            </template>
-          </div>
-        </div>
-        <div class="confirm-actions">
-          <button class="small-btn sage" type="button" @click="allRecordsOpen = false">关闭</button>
         </div>
       </section>
     </div>

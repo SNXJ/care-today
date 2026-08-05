@@ -3087,42 +3087,72 @@ body {
 .link-btn:hover {
   text-decoration: underline;
 }
-.records-dialog {
-  max-width: 560px;
-  width: 92vw;
+.records-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.records-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.records-field {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.records-field-label {
+  flex: 0 0 34px;
+  padding-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .records-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 10px 0 0;
+  flex: 1;
 }
-.records-range {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 10px 0 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
-.records-range label {
-  display: flex;
+.records-date {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
-.records-range .input {
-  width: auto;
-  padding: 6px 8px;
-  font-size: 13px;
+.records-date input {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12px;
 }
-.records-scroll {
-  max-height: 46vh;
-  overflow-y: auto;
-  margin-top: 6px;
-  padding-right: 4px;
+.records-search {
+  display: flex;
+  flex: 1;
+  gap: 8px;
 }
-.records-scroll .symptom-subhead small {
+.records-search .input {
+  flex: 1;
+}
+.symptom-subhead small {
   color: var(--muted);
   font-weight: 400;
   margin-left: 6px;
+}
+@media (max-width: 640px) {
+  .records-field {
+    flex-direction: column;
+    gap: 6px;
+  }
+  .records-field-label {
+    padding-top: 0;
+  }
 }

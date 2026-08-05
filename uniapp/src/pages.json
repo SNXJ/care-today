@@ -6,6 +6,7 @@
     { "path": "pages/body/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/files/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/notices/index", "style": { "navigationStyle": "custom" } },
+    { "path": "pages/records/index", "style": { "navigationStyle": "custom" } },
     { "path": "pages/compose/index", "style": { "navigationBarTitleText": "记下一件事" } },
     { "path": "pages/profile/index", "style": { "navigationBarTitleText": "我的陪伴空间" } },
     { "path": "pages/legal/user-agreement", "style": { "navigationBarTitleText": "用户协议" } },

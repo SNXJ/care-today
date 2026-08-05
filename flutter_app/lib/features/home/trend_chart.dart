@@ -172,11 +172,17 @@ class _TrendPainter extends CustomPainter {
     // 收集有值的点
     final dots = <Offset>[];
     final dotValues = <double>[];
+    // X 轴标签按实测宽度贪心抽稀：放不下就跳过，避免相邻标签重叠。
+    var lastLabelRight = -double.infinity;
     for (var i = 0; i < points.length; i++) {
-      // X 轴标签
-      _text(
-          canvas, points[i].label, Offset(px(i), size.height - 30), labelStyle,
-          center: true);
+      final labelWidth = _measureWidth(points[i].label, labelStyle);
+      final labelLeft = px(i) - labelWidth / 2;
+      if (labelLeft - lastLabelRight >= 6) {
+        _text(canvas, points[i].label, Offset(px(i), size.height - 30),
+            labelStyle,
+            center: true);
+        lastLabelRight = labelLeft + labelWidth;
+      }
       final v = points[i].value;
       if (v != null) {
         dots.add(Offset(px(i), py(v)));
@@ -233,6 +239,15 @@ class _TrendPainter extends CustomPainter {
     if (metric == '体温') return v.toStringAsFixed(1);
     if (metric == '体重') return trimDecimal(v);
     return v.round().toString();
+  }
+
+  /// 文本实际渲染宽度（多行取最宽一行），用于横坐标抽稀。
+  double _measureWidth(String text, TextStyle style) {
+    final tp = TextPainter(
+        text: TextSpan(text: text, style: style),
+        textDirection: TextDirection.ltr)
+      ..layout();
+    return tp.width;
   }
 
   void _text(Canvas canvas, String text, Offset at, TextStyle style,

@@ -127,10 +127,19 @@ function drawChart(ctx: any, points: { label: string; value: number | null }[]) 
 
   const dots: { x: number; y: number; v: number }[] = [];
   ctx.setTextAlign('center'); ctx.setTextBaseline('top'); ctx.setFillStyle('#9a8d7f'); ctx.setFontSize(9);
+  // X 轴标签按估算宽度贪心抽稀：放不下就跳过，避免相邻标签重叠。
+  // 小程序 canvas 的 measureText 在部分基座上不可靠，按字符数估算（9px 字号约 5px/字符）。
+  let lastLabelRight = -Infinity;
   for (let i = 0; i < points.length; i++) {
     const parts = points[i].label.split('\n');
-    let ly = baseY + 6;
-    for (const part of parts) { if (part) ctx.fillText(part, px(i), ly); ly += 12; }
+    const widest = parts.reduce((max: number, part: string) => Math.max(max, part.length), 0);
+    const labelW = widest * 5.2;
+    const labelLeft = px(i) - labelW / 2;
+    if (labelLeft - lastLabelRight >= 5) {
+      let ly = baseY + 6;
+      for (const part of parts) { if (part) ctx.fillText(part, px(i), ly); ly += 12; }
+      lastLabelRight = labelLeft + labelW;
+    }
     if (points[i].value != null) dots.push({ x: px(i), y: py(points[i].value as number), v: points[i].value as number });
   }
   if (dots.length > 1) {
