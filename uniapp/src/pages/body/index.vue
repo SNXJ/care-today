@@ -78,6 +78,118 @@ const scoreRows = computed(() => {
 function goCompose(type: string) {
   uni.navigateTo({ url: `/pages/compose/index?type=${type}` });
 }
+
+// —— 全部记录：四类记录的完整历史，支持时间范围过滤与关键字搜索 ——
+const recordKindLabels: Record<string, string> = {
+  symptom: '症状', medication: '用药', vital: '体征', score: '评分',
+};
+const vitalFieldLabels: Record<string, [string, string]> = {
+  temperature: ['体温', '℃'],
+  weight: ['体重', 'kg'],
+  systolic: ['收缩压', 'mmHg'],
+  diastolic: ['舒张压', 'mmHg'],
+  heartRate: ['心率', '次/分'],
+  bloodSugar: ['血糖', 'mmol/L'],
+};
+const allOpen = ref(false);
+const allKind = ref('symptom');
+const allDays = ref<number | null>(30);
+const allFrom = ref('');
+const allTo = ref('');
+const allQuery = ref('');
+
+function openAll(kind: string) {
+  allKind.value = kind;
+  allOpen.value = true;
+}
+function pickAllDays(days: number | null) {
+  allDays.value = days;
+  allFrom.value = '';
+  allTo.value = '';
+}
+function resetAllFilter() {
+  allDays.value = 30;
+  allFrom.value = '';
+  allTo.value = '';
+  allQuery.value = '';
+}
+// 去掉小数末尾的 .0，让 38.0 显示成 38
+function trimNumber(value: any) {
+  const text = String(value ?? '').trim();
+  return text.endsWith('.0') ? text.slice(0, -2) : text;
+}
+
+const allSource = computed(() => {
+  const kind = allKind.value;
+  const rows: any[] = [];
+  if (kind === 'symptom') {
+    for (const s of session.data.symptoms as any[]) {
+      rows.push({ id: s.id, kind, time: s.happenedAt, title: s.tag, subtitle: s.note || '' });
+    }
+  } else if (kind === 'medication') {
+    for (const m of session.data.medications as any[]) {
+      rows.push({ id: m.id, kind, time: m.takenAt, title: m.name, subtitle: medMeta(m) });
+    }
+  } else if (kind === 'vital') {
+    for (const r of session.data.body as any[]) {
+      const parts: string[] = [];
+      for (const [field, meta] of Object.entries(vitalFieldLabels)) {
+        const value = r[field];
+        if (value === null || value === undefined || value === '') continue;
+        parts.push(`${meta[0]} ${trimNumber(value)}${meta[1]}`);
+      }
+      if (!parts.length) continue;
+      rows.push({ id: r.id, kind, time: timeOf(r), title: parts.join(' · '), subtitle: r.note || '' });
+    }
+  } else {
+    for (const r of session.data.body as any[]) {
+      const parts = Object.entries(scoreLabels)
+        .filter(([field]) => r[field] !== null && r[field] !== undefined && r[field] !== '')
+        .map(([field, label]) => `${label} ${trimNumber(r[field])}`);
+      if (!parts.length) continue;
+      rows.push({ id: r.id, kind, time: r.createdAt || r.recordDate, title: parts.join(' · '), subtitle: r.note || '' });
+    }
+  }
+  return rows.sort((a, b) => +new Date(b.time) - +new Date(a.time));
+});
+
+const allFiltered = computed(() => {
+  let rows = allSource.value;
+  if (allFrom.value || allTo.value) {
+    const start = allFrom.value ? +new Date(`${allFrom.value}T00:00:00`) : null;
+    const end = allTo.value ? +new Date(`${allTo.value}T23:59:59`) : null;
+    rows = rows.filter((row) => {
+      const at = +new Date(row.time);
+      if (start !== null && at < start) return false;
+      if (end !== null && at > end) return false;
+      return true;
+    });
+  } else if (allDays.value) {
+    const cutoff = Date.now() - allDays.value * 86400000;
+    rows = rows.filter((row) => +new Date(row.time) >= cutoff);
+  }
+  const query = allQuery.value.trim().toLowerCase();
+  if (query) {
+    rows = rows.filter((row) => `${row.title} ${row.subtitle}`.toLowerCase().includes(query));
+  }
+  return rows;
+});
+
+const allGroups = computed(() => {
+  const groups = new Map<string, any[]>();
+  for (const row of allFiltered.value) {
+    const key = dateKey(row.time);
+    const list = groups.get(key) ?? [];
+    list.push({ ...row, clock: formatTime(row.time) });
+    groups.set(key, list);
+  }
+  const yesterday = dateKey(new Date(Date.now() - 86400000).toISOString());
+  return Array.from(groups, ([day, items]) => ({
+    day,
+    label: day === today.value ? '今天' : day === yesterday ? '昨天' : day,
+    items,
+  }));
+});
 </script>
 
 <template><view class="page"><PageHero eyebrow="BODY NOTES" title="身体" subtitle="只记录变化，不替你下结论。复诊时，把更清楚的信息交给医生。" :profile="session.isAuthed.value" />
@@ -93,6 +205,7 @@ function goCompose(type: string) {
     <!-- 变化趋势 -->
     <view class="card">
       <view class="card-title"><text>变化趋势</text>
+        <text class="link" @click="openAll('vital')">查看全部 ›</text>
         <view class="day-toggle">
           <text class="chip" :class="{ active: trendDays === 7 }" @click="trendDays = 7">7 天</text>
           <text class="chip" :class="{ active: trendDays === 30 }" @click="trendDays = 30">30 天</text>
@@ -114,7 +227,7 @@ function goCompose(type: string) {
 
     <!-- 用药记录 -->
     <view class="card">
-      <view class="card-title"><text>用药记录</text><text class="tag">{{ todayMedications.length ? `今天 ${todayMedications.length} 次` : '今天还没记' }}</text></view>
+      <view class="card-title"><text>用药记录</text><text class="link" @click="openAll('medication')">查看全部 ›</text><text class="tag">{{ todayMedications.length ? `今天 ${todayMedications.length} 次` : '今天还没记' }}</text></view>
       <view v-if="!todayMedications.length && !recentMedications.length" class="empty">还没有用药记录。点右下角「＋」记一次服药，别忘了吃药。</view>
       <template v-if="todayMedications.length">
         <text class="subhead">今天</text>
@@ -128,7 +241,7 @@ function goCompose(type: string) {
 
     <!-- 症状记录 -->
     <view class="card">
-      <view class="card-title"><text>症状记录</text><text class="tag">可查看</text></view>
+      <view class="card-title"><text>症状记录</text><text class="link" @click="openAll('symptom')">查看全部 ›</text><text class="tag">可查看</text></view>
       <view v-if="symptomTags.length > 1" class="chips">
         <text v-for="tag in symptomTags" :key="tag" class="chip" :class="{ active: symptomFilter === tag }" @click="symptomFilter = tag">{{ tag }}</text>
       </view>
@@ -145,7 +258,7 @@ function goCompose(type: string) {
 
     <!-- 评分记录 -->
     <view class="card">
-      <view class="card-title"><text>评分记录</text><text class="tag">最近 {{ scoreRows.length }} 条</text></view>
+      <view class="card-title"><text>评分记录</text><text class="link" @click="openAll('score')">查看全部 ›</text><text class="tag">最近 {{ scoreRows.length }} 条</text></view>
       <view v-if="!scoreRows.length" class="empty">还没有评分记录。</view>
       <view v-for="row in scoreRows" :key="row.id" class="score-row">
         <view class="score-date"><text class="sd-day">{{ row.date }}</text><text class="sd-time">{{ row.time }}</text></view>
@@ -157,5 +270,51 @@ function goCompose(type: string) {
 
     <view class="card boundary">身体记录不能替代医生判断。如症状明显加重，请及时联系医生或医院。</view>
     <ComposeFab type="body" />
+
+    <!-- 全部记录 -->
+    <view v-if="allOpen" class="sheet-mask" @click="allOpen = false">
+      <view class="sheet" @click.stop>
+        <view class="sheet-head">
+          <text class="sheet-title">全部记录</text>
+          <text class="sheet-close" @click="allOpen = false">关闭</text>
+        </view>
+        <view class="chips">
+          <text v-for="(label, kind) in recordKindLabels" :key="kind" class="chip" :class="{ active: allKind === kind }" @click="allKind = kind">{{ label }}</text>
+        </view>
+        <view class="chips">
+          <text class="chip" :class="{ active: !allFrom && !allTo && allDays === 7 }" @click="pickAllDays(7)">7 天</text>
+          <text class="chip" :class="{ active: !allFrom && !allTo && allDays === 30 }" @click="pickAllDays(30)">30 天</text>
+          <text class="chip" :class="{ active: !allFrom && !allTo && allDays === 90 }" @click="pickAllDays(90)">90 天</text>
+          <text class="chip" :class="{ active: !allFrom && !allTo && !allDays }" @click="pickAllDays(null)">全部</text>
+        </view>
+        <view class="range-row">
+          <picker mode="date" :value="allFrom" @change="allFrom = $event.detail.value">
+            <text class="range-pick">{{ allFrom || '开始日期' }}</text>
+          </picker>
+          <text class="range-sep">至</text>
+          <picker mode="date" :value="allTo" @change="allTo = $event.detail.value">
+            <text class="range-pick">{{ allTo || '结束日期' }}</text>
+          </picker>
+        </view>
+        <input v-model="allQuery" class="search-input" type="text" :placeholder="`搜索${recordKindLabels[allKind]}内容或备注`" />
+        <view class="sheet-meta">
+          <text>{{ allFiltered.length === allSource.length ? `共 ${allSource.length} 条` : `筛选出 ${allFiltered.length} 条 / 共 ${allSource.length} 条` }}</text>
+          <text v-if="allFrom || allTo || allQuery || allDays !== 30" class="link" @click="resetAllFilter">重置筛选</text>
+        </view>
+        <scroll-view scroll-y class="sheet-scroll">
+          <view v-if="!allFiltered.length" class="empty">这个时间范围内没有{{ recordKindLabels[allKind] }}记录。</view>
+          <template v-for="group in allGroups" :key="group.day">
+            <text class="subhead">{{ group.label }} · {{ group.items.length }} 条</text>
+            <view v-for="row in group.items" :key="`${row.kind}-${row.id}-${row.time}`" class="log-row">
+              <text class="log-time">{{ row.clock }}</text>
+              <view class="log-main">
+                <text class="log-title">{{ row.title }}</text>
+                <text v-if="row.subtitle" class="log-meta">{{ row.subtitle }}</text>
+              </view>
+            </view>
+          </template>
+        </scroll-view>
+      </view>
+    </view>
   </template>
 </view></template>

@@ -377,11 +377,15 @@ class SectionCard extends StatelessWidget {
       required this.title,
       this.tag,
       required this.child,
-      this.icon});
+      this.icon,
+      this.action});
   final String title;
   final String? tag;
   final Widget child;
   final IconData? icon;
+
+  /// 标题右侧的附加操作（如「查看全部」）。
+  final Widget? action;
   @override
   Widget build(BuildContext context) => Card(
         child: Padding(
@@ -409,6 +413,7 @@ class SectionCard extends StatelessWidget {
                       child: Text(tag!,
                           style: const TextStyle(fontSize: 12, color: muted)),
                     ),
+                  if (action != null) action!,
                 ],
               ),
               const SizedBox(height: 14),

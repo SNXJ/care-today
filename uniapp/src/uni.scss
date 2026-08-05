@@ -142,3 +142,16 @@ $amber: #c8893f;
 .bullet { display: flex; gap: 8rpx; padding: 8rpx 0; color: $ink; font-size: 26rpx; line-height: 1.6; }
 .bullet::before { content: '·'; font-weight: 700; }
 .inline-btn { margin-top: 18rpx; }
+
+/* —— 全部记录弹层（四类完整历史 + 时间过滤）—— */
+.sheet-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 90; display: flex; align-items: flex-end; background: rgba(46, 42, 39, 0.45); }
+.sheet { width: 100%; max-height: 86vh; padding: 28rpx 32rpx 40rpx; border-radius: 28rpx 28rpx 0 0; background: $panel; box-sizing: border-box; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20rpx; }
+.sheet-title { font-size: 34rpx; font-weight: 700; color: $ink; }
+.sheet-close { font-size: 26rpx; color: $muted; }
+.range-row { display: flex; align-items: center; gap: 16rpx; margin: 4rpx 0 16rpx; }
+.range-pick { padding: 10rpx 20rpx; border: 1px solid $line; border-radius: 12rpx; background: #fff; color: $ink; font-size: 24rpx; }
+.range-sep { color: $muted; font-size: 24rpx; }
+.search-input { width: 100%; padding: 16rpx 20rpx; border: 1px solid $line; border-radius: 12rpx; background: #fff; font-size: 26rpx; box-sizing: border-box; }
+.sheet-meta { display: flex; align-items: center; justify-content: space-between; margin: 16rpx 0 4rpx; color: $muted; font-size: 24rpx; }
+.sheet-scroll { max-height: 52vh; }

@@ -3072,3 +3072,57 @@ body {
   color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
 }
+
+/* —— 全部记录弹窗（四类完整历史 + 时间过滤）—— */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0 6px;
+  color: var(--rose);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.link-btn:hover {
+  text-decoration: underline;
+}
+.records-dialog {
+  max-width: 560px;
+  width: 92vw;
+}
+.records-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+.records-range {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.records-range label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.records-range .input {
+  width: auto;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.records-scroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 6px;
+  padding-right: 4px;
+}
+.records-scroll .symptom-subhead small {
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 6px;
+}

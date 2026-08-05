@@ -514,6 +514,153 @@ const scoreRecordRows = computed(() =>
     .slice(0, 8)
 );
 
+// —— 全部记录：四类记录的完整历史，支持时间范围过滤与关键字搜索 ——
+const recordKindLabels = { symptom: '症状', medication: '用药', vital: '体征', score: '评分' };
+const vitalFieldLabels = {
+  temperature: ['体温', '℃'],
+  weight: ['体重', 'kg'],
+  systolic: ['收缩压', 'mmHg'],
+  diastolic: ['舒张压', 'mmHg'],
+  heartRate: ['心率', '次/分'],
+  bloodSugar: ['血糖', 'mmol/L'],
+};
+const allRecordsOpen = ref(false);
+const allRecordsKind = ref('symptom');
+const allRecordsDays = ref(30); // null = 全部
+const allRecordsFrom = ref('');
+const allRecordsTo = ref('');
+const allRecordsQuery = ref('');
+
+function openAllRecords(kind) {
+  allRecordsKind.value = kind;
+  allRecordsOpen.value = true;
+}
+function resetAllRecordsFilter() {
+  allRecordsDays.value = 30;
+  allRecordsFrom.value = '';
+  allRecordsTo.value = '';
+  allRecordsQuery.value = '';
+}
+function pickAllRecordsDays(days) {
+  allRecordsDays.value = days;
+  allRecordsFrom.value = '';
+  allRecordsTo.value = '';
+}
+// 去掉小数末尾的 .0，让 38.0 显示成 38
+function trimNumber(value) {
+  const text = String(value ?? '').trim();
+  return text.endsWith('.0') ? text.slice(0, -2) : text;
+}
+
+const allRecordsSource = computed(() => {
+  const kind = allRecordsKind.value;
+  const rows = [];
+  if (kind === 'symptom') {
+    for (const item of symptoms.value) {
+      rows.push({ id: item.id, kind, time: item.happenedAt, title: item.tag, subtitle: item.note, raw: item });
+    }
+  } else if (kind === 'medication') {
+    for (const item of medications.value) {
+      rows.push({
+        id: item.id,
+        kind,
+        time: item.takenAt,
+        title: item.name,
+        subtitle: [item.dosage, item.note].filter(Boolean).join(' · '),
+        raw: item,
+      });
+    }
+  } else if (kind === 'vital') {
+    for (const record of bodyRecordItems.value) {
+      const parts = [];
+      for (const [field, [label, unit]] of Object.entries(vitalFieldLabels)) {
+        const value = record[field];
+        if (value === null || value === undefined || value === '') continue;
+        parts.push(`${label} ${trimNumber(value)}${unit}`);
+      }
+      if (!parts.length) continue;
+      rows.push({
+        id: record.id,
+        kind,
+        time: record.measuredAt || record.createdAt || record.recordDate,
+        title: parts.join(' · '),
+        subtitle: record.note || '',
+        raw: record,
+      });
+    }
+  } else {
+    for (const record of bodyRecordItems.value) {
+      const parts = scoreLabels
+        .map((label) => ({ label, value: record[scoreFieldByLabel[label]] }))
+        .filter((item) => item.value !== null && item.value !== undefined && item.value !== '')
+        .map((item) => `${item.label} ${trimNumber(item.value)}`);
+      if (!parts.length) continue;
+      rows.push({
+        id: record.id,
+        kind,
+        time: record.createdAt || record.recordDate,
+        title: parts.join(' · '),
+        subtitle: record.note || '',
+        raw: record,
+      });
+    }
+  }
+  return rows.sort((a, b) => new Date(b.time) - new Date(a.time));
+});
+
+const allRecordsFiltered = computed(() => {
+  let rows = allRecordsSource.value;
+  if (allRecordsFrom.value || allRecordsTo.value) {
+    const start = allRecordsFrom.value ? new Date(`${allRecordsFrom.value}T00:00:00`) : null;
+    const end = allRecordsTo.value ? new Date(`${allRecordsTo.value}T23:59:59`) : null;
+    rows = rows.filter((row) => {
+      const at = new Date(row.time);
+      if (start && at < start) return false;
+      if (end && at > end) return false;
+      return true;
+    });
+  } else if (allRecordsDays.value) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - allRecordsDays.value);
+    rows = rows.filter((row) => new Date(row.time) >= cutoff);
+  }
+  const query = allRecordsQuery.value.trim().toLowerCase();
+  if (query) {
+    rows = rows.filter((row) => `${row.title} ${row.subtitle}`.toLowerCase().includes(query));
+  }
+  return rows;
+});
+
+const allRecordsGroups = computed(() => {
+  const groups = new Map();
+  for (const row of allRecordsFiltered.value) {
+    const at = new Date(row.time);
+    const key = Number.isNaN(at.getTime()) ? '未知时间' : toDateKey(at);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({ ...row, clock: Number.isNaN(at.getTime()) ? '' : at.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) });
+  }
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayKey = toDateKey(yesterday);
+  return Array.from(groups, ([day, items]) => ({
+    day,
+    label: day === todayKey.value ? '今天' : day === yesterdayKey ? '昨天' : day,
+    items,
+  }));
+});
+
+function openAllRecordRow(row) {
+  if (row.kind === 'symptom') return openManage('symptom', row.raw);
+  if (row.kind === 'medication') return openManage('medication', row.raw);
+  if (row.kind === 'vital') {
+    const kind = row.raw.temperature !== null && row.raw.temperature !== undefined ? 'temperature' : 'weight';
+    if (row.raw[kind] === null || row.raw[kind] === undefined) return undefined;
+    allRecordsOpen.value = false;
+    return editBodyMeasure(row.raw, kind);
+  }
+  return undefined;
+}
+
 onMounted(() => {
   const invite = new URLSearchParams(window.location.search).get('invite');
   if (invite) {
@@ -2518,6 +2665,7 @@ function mapMember(member) {
               <span class="title-icon sage"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>变化趋势</h2>
             </div>
+            <button class="link-btn" type="button" @click="openAllRecords('vital')">查看全部 ›</button>
             <div class="segmented">
               <button :class="{ active: trendDays === 7 }" type="button" @click="trendDays = 7">7 天</button>
               <button :class="{ active: trendDays === 30 }" type="button" @click="trendDays = 30">30 天</button>
@@ -2600,6 +2748,7 @@ function mapMember(member) {
               <span class="title-icon amber"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>症状记录</h2>
             </div>
+            <button class="link-btn" type="button" @click="openAllRecords('symptom')">查看全部 ›</button>
             <span class="tag">可编辑</span>
           </header>
           <div class="card-body">
@@ -2651,6 +2800,7 @@ function mapMember(member) {
               <span class="title-icon rose"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>用药记录</h2>
             </div>
+            <button class="link-btn" type="button" @click="openAllRecords('medication')">查看全部 ›</button>
             <span class="tag">{{ todayMedications.length ? `今天 ${todayMedications.length} 次` : '今天还没记' }}</span>
           </header>
           <div class="card-body">
@@ -2692,6 +2842,7 @@ function mapMember(member) {
               <span class="title-icon sage"><img :src="iconBody" alt="" aria-hidden="true" /></span>
               <h2>评分记录</h2>
             </div>
+            <button class="link-btn" type="button" @click="openAllRecords('score')">查看全部 ›</button>
             <span class="tag">最近 {{ scoreRecordRows.length }} 条</span>
           </header>
           <div class="card-body">
@@ -3073,6 +3224,68 @@ function mapMember(member) {
         </div>
         <div class="confirm-actions">
           <button class="small-btn sage" type="button" @click="folderOpen = false">关闭</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="allRecordsOpen" class="modal-backdrop" role="presentation" @click.self="allRecordsOpen = false">
+      <section class="confirm-dialog panel-dialog records-dialog" role="dialog" aria-modal="true" aria-labelledby="all-records-title">
+        <div>
+          <p class="eyebrow">完整历史</p>
+          <h2 id="all-records-title">全部记录</h2>
+          <div class="records-tabs">
+            <button
+              v-for="(label, kind) in recordKindLabels"
+              :key="kind"
+              class="trend-chip"
+              :class="{ active: allRecordsKind === kind }"
+              type="button"
+              @click="allRecordsKind = kind"
+            >
+              {{ label }}
+            </button>
+          </div>
+          <div class="records-tabs">
+            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 7 }" type="button" @click="pickAllRecordsDays(7)">7 天</button>
+            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 30 }" type="button" @click="pickAllRecordsDays(30)">30 天</button>
+            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && allRecordsDays === 90 }" type="button" @click="pickAllRecordsDays(90)">90 天</button>
+            <button class="trend-chip" :class="{ active: !allRecordsFrom && !allRecordsTo && !allRecordsDays }" type="button" @click="pickAllRecordsDays(null)">全部</button>
+          </div>
+          <div class="records-range">
+            <label>从 <input v-model="allRecordsFrom" type="date" class="input" /></label>
+            <label>到 <input v-model="allRecordsTo" type="date" class="input" /></label>
+          </div>
+          <input v-model="allRecordsQuery" class="input" type="search" :placeholder="`搜索${recordKindLabels[allRecordsKind]}内容或备注`" />
+          <p class="section-hint">
+            {{ allRecordsFiltered.length === allRecordsSource.length ? `共 ${allRecordsSource.length} 条` : `筛选出 ${allRecordsFiltered.length} 条 / 共 ${allRecordsSource.length} 条` }}
+            <button v-if="allRecordsFrom || allRecordsTo || allRecordsQuery || allRecordsDays !== 30" class="link-btn" type="button" @click="resetAllRecordsFilter">重置筛选</button>
+          </p>
+          <p v-if="!allRecordsFiltered.length" class="empty-note">这个时间范围内没有{{ recordKindLabels[allRecordsKind] }}记录。</p>
+          <div v-else class="records-scroll">
+            <template v-for="group in allRecordsGroups" :key="group.day">
+              <h3 class="symptom-subhead">{{ group.label }} <small>{{ group.items.length }} 条</small></h3>
+              <div class="symptom-list">
+                <button
+                  v-for="row in group.items"
+                  :key="`${row.kind}-${row.id}-${row.time}`"
+                  class="symptom-row"
+                  :class="{ past: group.day !== todayKey }"
+                  type="button"
+                  @click="openAllRecordRow(row)"
+                >
+                  <strong class="time">{{ row.clock }}</strong>
+                  <div>
+                    <strong>{{ row.title }}</strong>
+                    <span v-if="row.subtitle">{{ row.subtitle }}</span>
+                  </div>
+                  <span v-if="row.kind !== 'score'" class="chevron">›</span>
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="small-btn sage" type="button" @click="allRecordsOpen = false">关闭</button>
         </div>
       </section>
     </div>

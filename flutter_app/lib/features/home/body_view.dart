@@ -5,16 +5,24 @@ import '../../core/ui.dart';
 import '../session/session_controller.dart';
 import 'actions.dart';
 import 'manage.dart';
+import 'records_all_page.dart';
+import 'records_filter.dart';
 import 'trend_chart.dart';
 
 const _disclaimer = '仅用于陪伴协作和就诊整理；诊断、用药和治疗以医生意见为准。';
-const _scoreLabels = {
-  '疼痛': 'painScore',
-  '乏力': 'fatigueScore',
-  '睡眠': 'sleepScore',
-  '心情': 'moodScore',
-  '食欲': 'appetiteScore',
-};
+const _scoreLabels = scoreFieldLabels;
+
+/// 卡片标题右侧的「查看全部」入口。
+Widget _viewAllButton(BuildContext context, RecordKind kind) => TextButton(
+      style: TextButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 6),
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      ),
+      onPressed: () => RecordsAllPage.open(context, kind),
+      child: const Text('查看全部 ›', style: TextStyle(fontSize: 12)),
+    );
 
 class BodyView extends StatefulWidget {
   const BodyView({super.key});
@@ -47,11 +55,11 @@ class _BodyViewState extends State<BodyView> {
         _summaryTiles(
             context, s, latestTemp, latestWeight, todaySymptoms.length),
         const SizedBox(height: 4),
-        _trendCard(s),
+        _trendCard(context, s),
         if (_todayTemps(s, today).isNotEmpty) _todayTempCard(context, s, today),
         _medicationCard(context, s, today),
         _symptomCard(context, s, today),
-        _scoreRecordsCard(s),
+        _scoreRecordsCard(context, s),
         SectionCard(
             title: '医疗边界',
             icon: Icons.privacy_tip_outlined,
@@ -102,9 +110,10 @@ class _BodyViewState extends State<BodyView> {
     );
   }
 
-  Widget _trendCard(SessionController s) {
+  Widget _trendCard(BuildContext context, SessionController s) {
     return SectionCard(
       title: '变化趋势',
+      action: _viewAllButton(context, RecordKind.vital),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -204,6 +213,7 @@ class _BodyViewState extends State<BodyView> {
       title: '用药记录',
       tag: todayList.isEmpty ? '今天还没记' : '今天 ${todayList.length} 次',
       icon: Icons.medication_outlined,
+      action: _viewAllButton(context, RecordKind.medication),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -287,6 +297,7 @@ class _BodyViewState extends State<BodyView> {
       title: '症状记录',
       tag: '可编辑',
       icon: Icons.healing_outlined,
+      action: _viewAllButton(context, RecordKind.symptom),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -345,7 +356,7 @@ class _BodyViewState extends State<BodyView> {
     );
   }
 
-  Widget _scoreRecordsCard(SessionController s) {
+  Widget _scoreRecordsCard(BuildContext context, SessionController s) {
     final rows = <Widget>[];
     for (final r in s.body.cast<Map>()) {
       final scores = _scoreLabels.entries
@@ -407,6 +418,7 @@ class _BodyViewState extends State<BodyView> {
       title: '评分记录',
       tag: '最近 ${rows.length} 条',
       icon: Icons.favorite_outline,
+      action: _viewAllButton(context, RecordKind.score),
       child: rows.isEmpty
           ? emptyNote('还没有评分记录。')
           : Column(
