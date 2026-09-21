@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.time.Instant;
 import java.time.LocalDate;
 
@@ -28,16 +29,16 @@ public final class CareRequests {
   public record AcceptInviteRequest(String nickname) {}
 
   public record CreateEventRequest(
-      @NotBlank String title,
+      @NotBlank @Size(max = 500, message = "标题最多 500 字") String title,
       @NotNull Instant scheduledAt,
-      String location,
+      @Size(max = 300, message = "地点最多 300 字") String location,
       String note,
       boolean needsCompanion) {}
 
   public record UpdateEventRequest(
-      String title,
+      @Size(max = 500, message = "标题最多 500 字") String title,
       Instant scheduledAt,
-      String location,
+      @Size(max = 300, message = "地点最多 300 字") String location,
       String note,
       Boolean needsCompanion) {}
 
