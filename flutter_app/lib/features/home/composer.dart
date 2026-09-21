@@ -207,10 +207,12 @@ Future<void> showManageSheet(BuildContext context,
   final action = await showModalBottomSheet<ManageAction>(
     context: context,
     showDragHandle: true,
+    isScrollControlled: true,
     builder: (_) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-        child: Column(
+        child: SingleChildScrollView(
+          child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -255,6 +257,7 @@ Future<void> showManageSheet(BuildContext context,
                   .toList(),
             ),
           ],
+        ),
         ),
       ),
     ),
