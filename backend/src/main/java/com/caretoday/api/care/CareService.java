@@ -35,6 +35,9 @@ import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
 import com.caretoday.api.care.CareRequests.UpdateMedicationLogRequest;
 import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import java.util.List;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -417,6 +420,24 @@ public class CareService {
   public List<MedicationLog> listMedicationLogs(UUID currentUserId, UUID spaceId) {
     ensureActiveMember(spaceId, currentUserId);
     return careRepository.listMedicationLogs(spaceId);
+  }
+
+  /** 复诊汇总：区间内不良反应 + 用药 → 可复制文本。 */
+  public Map<String, Object> doctorVisitSummary(
+      UUID currentUserId, UUID spaceId, LocalDate from, LocalDate to) {
+    ensureActiveMember(spaceId, currentUserId);
+    if (from == null || to == null || from.isAfter(to)) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "日期范围不合法");
+    }
+    String text = DoctorSummary.build(
+        careRepository.listSymptomEvents(spaceId),
+        careRepository.listMedicationLogs(spaceId),
+        from, to, ZoneId.of("Asia/Shanghai"));
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("from", from.toString());
+    result.put("to", to.toString());
+    result.put("text", text);
+    return result;
   }
 
   public MedicationLog createMedicationLog(UUID currentUserId, UUID spaceId, CreateMedicationLogRequest request) {

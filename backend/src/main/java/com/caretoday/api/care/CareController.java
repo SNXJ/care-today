@@ -25,7 +25,10 @@ import com.caretoday.api.care.CareRequests.UpdateNoticeRequest;
 import com.caretoday.api.care.CareRequests.UpdateSymptomEventRequest;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
+import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -103,6 +106,23 @@ public class CareController {
   @GetMapping("/spaces/{spaceId}/events")
   public Object listEvents(HttpServletRequest httpRequest, @PathVariable UUID spaceId) {
     return careService.listEvents(currentUser(httpRequest).id(), spaceId);
+  }
+
+  @GetMapping("/spaces/{spaceId}/summary")
+  public Object doctorVisitSummary(
+      HttpServletRequest httpRequest,
+      @PathVariable UUID spaceId,
+      @RequestParam("from") String from,
+      @RequestParam("to") String to) {
+    LocalDate fromDate;
+    LocalDate toDate;
+    try {
+      fromDate = LocalDate.parse(from);
+      toDate = LocalDate.parse(to);
+    } catch (DateTimeParseException ex) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "日期格式应为 YYYY-MM-DD");
+    }
+    return careService.doctorVisitSummary(currentUser(httpRequest).id(), spaceId, fromDate, toDate);
   }
 
   @PostMapping("/spaces/{spaceId}/events")

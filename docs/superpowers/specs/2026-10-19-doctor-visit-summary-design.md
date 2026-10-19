@@ -22,9 +22,10 @@
 
 ## 范围
 
-- **后端**：新增聚合接口，格式化逻辑集中在此（单一真相，未来网页/小程序可复用）。
+- **后端**：新增聚合接口，格式化逻辑集中在此（单一真相）。
 - **Flutter App**：在「全部记录」页加入口，调接口并把结果复制到剪贴板。
-- 本期不改网页端、不改小程序端（接口已就位，以后接入成本低）。
+- **网页端**（`src/App.vue`）：同步加入口，交互与 Flutter 一致。
+- 本期不改小程序端（接口已就位，以后接入成本低）。
 
 ## 数据来源（现有表，不新增表）
 
@@ -89,13 +90,27 @@ GET /api/spaces/{spaceId}/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
 - `CareRepository` 新增按区间查询 symptom/medication 的方法（或复用现有 list 方法后在内存过滤——数据量小，二者皆可；优先 SQL 带区间）。
 - `CareController` 新增 `@GetMapping("/spaces/{spaceId}/summary")`。
 
+## 默认日期区间（客户端计算，两端一致）
+
+- `to` = 今天。
+- `from` = **最近一次用药记录的日期**（`medication_logs` 中 `taken_at` 最大者的本地日期）——汇总「上次用药以来」的反应/用药。
+- 回退：若该空间无用药记录，则 `from` = 今天 − 20 天（最近 21 天）。
+- 两个客户端都已在「全部记录」页加载了用药列表，直接本地取最大 `taken_at` 即可，无需额外接口。用户可在选择器里改。
+
 ## Flutter 设计
 
 - 「全部记录」页顶部加按钮 **「生成复诊汇总」**。
-- 点击 → `showDateRangePicker`，默认区间 = **最近 21 天**（`今天-20 天 .. 今天`，闭区间共 21 天），可改。
+- 点击 → `showDateRangePicker`，默认区间按上节计算，可改。
 - 选定后调 `GET /spaces/{id}/summary?from=..&to=..`。
 - 结果弹窗：可滚动展示 `text`（复用已可滚动的弹窗形态），**打开即自动 `Clipboard.setData`**，toast 提示「已复制，可粘贴发给医生」；弹窗内另留一个「复制」按钮便于再次复制。
 - 失败（网络/400）走现有 `showError`。
+
+## 网页设计（src/App.vue）
+
+- 「全部记录」对应视图顶部加同样的 **「生成复诊汇总」** 按钮。
+- 点击 → 两个 `datetime`/`date` 输入（或日期范围控件）默认按上节计算，可改。
+- 调 `api` 封装的 `summary(spaceId, from, to)` → 弹窗展示 `text` + `navigator.clipboard.writeText` 复制 + toast。
+- 失败走现有错误提示。
 
 ## 边界与异常
 
