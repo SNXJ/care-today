@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/format.dart';
 import '../../core/ui.dart';
@@ -60,6 +61,80 @@ class _RecordsAllPageState extends State<RecordsAllPage> {
     }
   }
 
+  /// 复诊汇总：选时间段 → 后端聚合不良反应+用药 → 复制并展示文本。
+  Future<void> _generateSummary(SessionController s) async {
+    final now = DateTime.now();
+    // 默认起始 = 最近一次用药日期；无用药记录则回退 21 天。
+    DateTime start = now.subtract(const Duration(days: 20));
+    final medDates = s.medications
+        .map((m) => tryParse((m as Map)['takenAt']))
+        .whereType<DateTime>()
+        .map((d) => d.toLocal())
+        .toList()
+      ..sort();
+    if (medDates.isNotEmpty) {
+      start = medDates.last;
+    }
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange: DateTimeRange(
+          start: DateUtils.dateOnly(start), end: DateUtils.dateOnly(now)),
+      helpText: '选择汇总时间段',
+      saveText: '生成',
+    );
+    if (picked == null || !mounted) return;
+    try {
+      final res = await s.api.request(
+          '/spaces/${s.spaceId}/summary?from=${_ymd(picked.start)}&to=${_ymd(picked.end)}');
+      final text = (res is Map ? res['text'] : null)?.toString() ?? '';
+      if (!mounted) return;
+      await _showSummaryDialog(text);
+    } catch (e) {
+      if (mounted) showError(context, e);
+    }
+  }
+
+  String _ymd(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  Future<void> _showSummaryDialog(String text) async {
+    await Clipboard.setData(ClipboardData(text: text));
+    if (!mounted) return;
+    showToast(context, '汇总已复制，可粘贴发给医生');
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _panel,
+        title: const Text('复诊汇总',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18)),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              text.isEmpty ? '这个时间段没有记录。' : text,
+              style: const TextStyle(height: 1.65, fontSize: 14),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('关闭')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xffb85f55)),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: text));
+              if (ctx.mounted) showToast(ctx, '已复制');
+            },
+            child: const Text('复制'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _openRecord(UnifiedRecord r, SessionController s) {
     switch (r.kind) {
       case RecordKind.symptom:
@@ -99,6 +174,14 @@ class _RecordsAllPageState extends State<RecordsAllPage> {
         elevation: 0,
         title: const Text('全部记录',
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 19)),
+        actions: [
+          TextButton(
+            onPressed: () => _generateSummary(s),
+            child: const Text('复诊汇总',
+                style: TextStyle(
+                    color: Color(0xffb85f55), fontWeight: FontWeight.w700)),
+          ),
+        ],
       ),
       body: Column(
         children: [
