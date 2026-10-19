@@ -1095,8 +1095,13 @@ async function generateDoctorSummary() {
   }
   try {
     const result = await api.doctorSummary(activeSpaceId.value, from, to);
-    const copied = await copyText(result.text);
-    showToast(copied ? '汇总已复制，可粘贴发给医生' : '已生成，请手动复制');
+    let copied = false;
+    try {
+      copied = await copyText(result.text);
+    } catch (copyError) {
+      copied = false;
+    }
+    showToast(copied ? '汇总已复制，可粘贴发给医生' : '已生成，可在弹窗里复制');
     const again = await openConfirmDialog({
       eyebrow: '复诊汇总',
       title: `不良反应与用药 · ${from} 至 ${to}`,
@@ -1107,8 +1112,13 @@ async function generateDoctorSummary() {
       cancelText: '关闭',
     });
     if (again) {
-      const ok = await copyText(result.text);
-      showToast(ok ? '已复制' : '当前浏览器不支持自动复制');
+      let ok = false;
+      try {
+        ok = await copyText(result.text);
+      } catch (copyError) {
+        ok = false;
+      }
+      showToast(ok ? '已复制' : '复制失败，请长按/选中文本手动复制');
     }
   } catch (error) {
     showToast(error.message || '生成汇总失败');
