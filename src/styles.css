@@ -3156,3 +3156,19 @@ body {
     padding-top: 0;
   }
 }
+
+/* 复诊汇总文本：保留换行、可滚动 */
+.dialog-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 46vh;
+  overflow-y: auto;
+  margin-top: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--panel-strong);
+  border: 1px solid var(--line);
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--ink);
+}

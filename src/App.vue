@@ -1064,6 +1064,7 @@ function openConfirmDialog(options) {
       eyebrow: options.eyebrow || '确认操作',
       title: options.title,
       message: options.message || '',
+      pre: Boolean(options.pre),
       icon: options.icon || iconLock,
       fields: [],
       values: {},
@@ -1074,6 +1075,44 @@ function openConfirmDialog(options) {
       resolver: resolve,
     };
   });
+}
+
+function summaryDefaultFrom() {
+  const lastMed = medications.value.map((item) => item.dateKey).filter(Boolean).sort().pop();
+  if (lastMed) return lastMed;
+  const d = new Date();
+  d.setDate(d.getDate() - 20);
+  return d.toISOString().slice(0, 10);
+}
+
+async function generateDoctorSummary() {
+  if (!activeSpaceId.value) return;
+  const to = allRecordsTo.value || todayKey.value;
+  const from = allRecordsFrom.value || summaryDefaultFrom();
+  if (from > to) {
+    showToast('开始日期不能晚于结束日期');
+    return;
+  }
+  try {
+    const result = await api.doctorSummary(activeSpaceId.value, from, to);
+    const copied = await copyText(result.text);
+    showToast(copied ? '汇总已复制，可粘贴发给医生' : '已生成，请手动复制');
+    const again = await openConfirmDialog({
+      eyebrow: '复诊汇总',
+      title: `不良反应与用药 · ${from} 至 ${to}`,
+      message: result.text,
+      pre: true,
+      icon: iconPrivacy,
+      confirmText: copied ? '再复制一次' : '复制',
+      cancelText: '关闭',
+    });
+    if (again) {
+      const ok = await copyText(result.text);
+      showToast(ok ? '已复制' : '当前浏览器不支持自动复制');
+    }
+  } catch (error) {
+    showToast(error.message || '生成汇总失败');
+  }
 }
 
 function openFormDialog(options) {
@@ -2925,6 +2964,7 @@ function mapMember(member) {
           <header class="card-header records-header">
             <button class="small-btn" type="button" @click="closeAllRecords">‹ 返回身体</button>
             <span class="tag">{{ allRecordsFiltered.length === allRecordsSource.length ? `共 ${allRecordsSource.length} 条` : `${allRecordsFiltered.length} / ${allRecordsSource.length} 条` }}</span>
+            <button class="small-btn sage" type="button" @click="generateDoctorSummary">生成复诊汇总</button>
           </header>
           <div class="card-body">
             <div class="records-filters">
@@ -3393,7 +3433,7 @@ function mapMember(member) {
         <div>
           <p class="eyebrow">{{ dialog.eyebrow }}</p>
           <h2 id="app-dialog-title">{{ dialog.title }}</h2>
-          <p v-if="dialog.message">{{ dialog.message }}</p>
+          <p v-if="dialog.message" :class="{ 'dialog-pre': dialog.pre }">{{ dialog.message }}</p>
           <div v-if="dialog.mode === 'form'" class="dialog-fields">
             <label v-for="field in dialog.fields" :key="field.name" class="dialog-field" :class="{ 'photos-field': field.type === 'photos' }">
               <span>{{ field.label }}</span>

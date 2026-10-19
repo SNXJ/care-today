@@ -130,6 +130,7 @@ export function createApi(getToken, handlers = {}) {
     createMedication: (spaceId, body) => request(`/spaces/${spaceId}/medications`, { method: 'POST', body }),
     updateMedication: (spaceId, logId, body) => request(`/spaces/${spaceId}/medications/${logId}`, { method: 'PATCH', body }),
     deleteMedication: (spaceId, logId) => request(`/spaces/${spaceId}/medications/${logId}`, { method: 'DELETE' }),
+    doctorSummary: (spaceId, from, to) => request(`/spaces/${spaceId}/summary?from=${from}&to=${to}`),
     listNotices: (spaceId) => request(`/spaces/${spaceId}/notices`),
     createNotice: (spaceId, body) => request(`/spaces/${spaceId}/notices`, { method: 'POST', body }),
     updateNotice: (spaceId, noticeId, body) => request(`/spaces/${spaceId}/notices/${noticeId}`, { method: 'PATCH', body }),
