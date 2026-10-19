@@ -75,6 +75,10 @@ class _RecordsAllPageState extends State<RecordsAllPage> {
     if (medDates.isNotEmpty) {
       start = medDates.last;
     }
+    // 防御：用药日期异常（未来日期/时区）时钳制，避免 DateTimeRange 断言崩溃。
+    if (start.isAfter(now)) {
+      start = now;
+    }
     final picked = await showDateRangePicker(
       context: context,
       firstDate: DateTime(now.year - 5),
