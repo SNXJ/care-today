@@ -45,20 +45,16 @@ onShow(async () => {
 });
 
 async function submitAuth() {
-  console.log('[login] 点击触发 submitAuth', { account: auth.account, passwordLen: auth.password.length, mode: mode.value });
   const account = auth.account.trim();
   if (!account || !auth.password) {
-    console.log('[login] 拦截：账号或密码为空');
     uni.showToast({ title: '请填写账号和密码', icon: 'none' });
     return;
   }
   if (mode.value === 'register' && !agreementAccepted.value) {
-    console.log('[login] 拦截：注册未勾选协议');
     uni.showToast({ title: '请先阅读并同意协议', icon: 'none' });
     return;
   }
   const isEmail = account.includes('@');
-  console.log('[login] 准备发请求', { isEmail });
   submitting.value = true;
   try {
     if (mode.value === 'login') {
@@ -71,9 +67,8 @@ async function submitAuth() {
         password: auth.password,
       });
     }
-    console.log('[login] 请求成功');
     uni.showToast({ title: mode.value === 'login' ? '欢迎回来' : '注册成功' });
-  } catch (error) { console.error('[login] 请求失败', error); showError(error); } finally { submitting.value = false; }
+  } catch (error) { showError(error); } finally { submitting.value = false; }
 }
 
 async function submitSpace() {
