@@ -4,6 +4,7 @@ import { onLoad, onShow } from '@dcloudio/uni-app';
 import PageHero from '../../components/PageHero.vue';
 import { useSession } from '../../state/session';
 import { dateKey, formatTime, showError } from '../../utils/format';
+import { api } from '../../api/client';
 
 const session = useSession();
 onShow(() => session.boot().catch(showError));
@@ -34,6 +35,39 @@ onLoad((options: any) => {
 });
 
 const today = computed(() => dateKey());
+
+// —— 复诊汇总 ——
+const showSummary = ref(false);
+const sumText = ref('');
+const sumRange = ref('');
+const sumLoading = ref(false);
+
+function summaryDefaultFrom() {
+  const keys = session.data.medications.map((m: any) => dateKey(m.takenAt)).filter(Boolean).sort();
+  return keys.length ? keys[keys.length - 1] : dateKey(new Date(Date.now() - 20 * 86400000));
+}
+async function genSummary() {
+  const spaceId = session.data.space?.id;
+  if (!spaceId) { uni.showToast({ title: '请先登录', icon: 'none' }); return; }
+  const f = from.value || summaryDefaultFrom();
+  const t = to.value || today.value;
+  if (f > t) { uni.showToast({ title: '开始日期不能晚于结束', icon: 'none' }); return; }
+  sumLoading.value = true;
+  try {
+    const res: any = await api.doctorSummary(spaceId, f, t);
+    sumText.value = res?.text || '';
+    sumRange.value = `${f} 至 ${t}`;
+    showSummary.value = true;
+    if (sumText.value) {
+      uni.setClipboardData({ data: sumText.value, success: () => uni.showToast({ title: '已复制，可发给医生' }) });
+    }
+  } catch (error) { showError(error); } finally { sumLoading.value = false; }
+}
+function copySummary() {
+  if (!sumText.value) return;
+  uni.setClipboardData({ data: sumText.value, success: () => uni.showToast({ title: '已复制' }) });
+}
+function closeSummary() { showSummary.value = false; }
 
 function pickDays(value: number | null) {
   days.value = value;
@@ -133,6 +167,8 @@ function goBack() {
 <template><view class="page">
   <PageHero eyebrow="ALL RECORDS" title="全部记录" subtitle="按类别和时间查看完整历史，复诊时翻给医生看。" :profile="false" />
 
+  <button class="summary-btn" :loading="sumLoading" @click="genSummary()">生成复诊汇总（发给医生）</button>
+
   <view class="card">
     <view class="card-title"><text>筛选</text><text class="link" @click="goBack">‹ 返回</text></view>
 
@@ -178,5 +214,19 @@ function goBack() {
         </view>
       </view>
     </template>
+  </view>
+
+  <!-- 复诊汇总弹窗 -->
+  <view v-if="showSummary" class="sum-mask" @click="closeSummary()"></view>
+  <view v-if="showSummary" class="sum-sheet">
+    <view class="sum-head">
+      <text class="sum-title">复诊汇总</text>
+      <text class="sum-range">{{ sumRange }}</text>
+    </view>
+    <scroll-view scroll-y class="sum-body"><text class="sum-text">{{ sumText || '这个时间段没有记录。' }}</text></scroll-view>
+    <view class="sum-foot">
+      <button class="secondary" @click="closeSummary()">关闭</button>
+      <button class="primary" @click="copySummary()">复制</button>
+    </view>
   </view>
 </view></template>

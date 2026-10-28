@@ -78,6 +78,7 @@ export const api = {
   createEvent: (id: string, data: any) => request(`/spaces/${id}/events`, { method: 'POST', data }),
   updateEvent: (id: string, eventId: string, data: any) => request(`/spaces/${id}/events/${eventId}`, { method: 'PATCH', data }),
   deleteEvent: (id: string, eventId: string) => request(`/spaces/${id}/events/${eventId}`, { method: 'DELETE' }),
+  doctorSummary: (id: string, from: string, to: string) => request<{ from: string; to: string; text: string }>(`/spaces/${id}/summary?from=${from}&to=${to}`),
   listBody: (id: string) => request<any[]>(`/spaces/${id}/body-records`),
   createBody: (id: string, data: any) => request(`/spaces/${id}/body-records`, { method: 'POST', data }),
   listQuestions: (id: string) => request<any[]>(`/spaces/${id}/doctor-questions`),

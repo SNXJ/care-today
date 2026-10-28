@@ -51,6 +51,17 @@ button::after { border: 0; }
 .metric { padding: 24rpx; border: 1px solid $line; border-radius: 20rpx; background: #fff; }
 .metric-value { display: block; margin-top: 10rpx; color: $rose; font-family: "Songti SC", serif; font-size: 44rpx; font-weight: 700; }
 
+/* 复诊汇总 */
+.summary-btn { margin: 0 4rpx 22rpx; min-height: 84rpx; border-radius: 18rpx; background: $rose; color: #fff; font-size: 28rpx; font-weight: 700; line-height: 84rpx; }
+.sum-mask { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 90; background: rgba(40,30,24,.42); }
+.sum-sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 91; display: flex; flex-direction: column; max-height: 82vh; padding: 18rpx 32rpx calc(40rpx + env(safe-area-inset-bottom)); background: $panel; border-radius: 32rpx 32rpx 0 0; box-shadow: 0 -12rpx 40rpx rgba(40,30,24,.16); }
+.sum-head { display: flex; align-items: baseline; justify-content: space-between; padding: 10rpx 0 16rpx; }
+.sum-title { font-size: 32rpx; font-weight: 700; }
+.sum-range { color: $muted; font-size: 24rpx; }
+.sum-body { max-height: 54vh; margin-bottom: 20rpx; padding: 20rpx 22rpx; border: 1px solid $line; border-radius: 16rpx; background: #fff; }
+.sum-text { font-size: 27rpx; line-height: 1.8; color: $ink; white-space: pre-wrap; word-break: break-word; }
+.sum-foot { display: grid; grid-template-columns: 1fr 1fr; gap: 16rpx; }
+
 /* —— 对齐 Flutter App：身体页汇总磁贴 —— */
 $amber: #c8893f;
 .tile-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16rpx; margin-bottom: 24rpx; }
